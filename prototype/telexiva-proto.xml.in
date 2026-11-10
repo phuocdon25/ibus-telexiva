@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Telexiva prototype (Phase 0). Được install.sh sinh ra từ file .in này. -->
+<component>
+  <name>org.freedesktop.IBus.TelexivaProto</name>
+  <description>Telexiva prototype</description>
+  <exec>/usr/bin/python3 @SCRIPT@ --ibus</exec>
+  <version>0.0.1</version>
+  <author>phuocdon25</author>
+  <license>GPL-3.0-or-later</license>
+  <homepage>https://github.com/phuocdon25/telexiva</homepage>
+  <textdomain>telexiva</textdomain>
+  <engines>
+    <engine>
+      <name>telexiva-proto</name>
+      <language>vi</language>
+      <license>GPL-3.0-or-later</license>
+      <author>phuocdon25</author>
+      <layout>us</layout>
+      <longname>Telexiva (prototype)</longname>
+      <description>Telex, không preedit — bản thử nghiệm Phase 0</description>
+      <symbol>TX</symbol>
+      <rank>0</rank>
+    </engine>
+  </engines>
+</component>

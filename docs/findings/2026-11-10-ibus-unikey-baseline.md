@@ -5,7 +5,7 @@
 | Ngày | 2026-11-10 |
 | Môi trường | Ubuntu 26.04, GNOME Wayland, Chrome 148 (native Wayland), IBus 1.5.34, `ibus-unikey 0.7.0~beta1`, Telex |
 | Công cụ | `tools/playground/index.html` (bản trước commit sửa thời điểm đọc value) |
-| Log gốc | `test1.md` (1138 sự kiện) |
+| Log gốc | [logs/2026-11-10-ibus-unikey-run1.md](logs/2026-11-10-ibus-unikey-run1.md) (1138 sự kiện) |
 
 ## Kết luận chính
 

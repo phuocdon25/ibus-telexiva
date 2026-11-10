@@ -154,7 +154,7 @@ Dấu `w` áp dụng cho cả cụm nguyên âm khi hợp lệ: `uo` + `w` → `
 | `j` | Nặng | `aj` → `ạ` |
 | `z` | Xóa dấu thanh (giữ dấu mũ/móc) | `áz` → `a`, `ấz` → `â` |
 
-- **Gõ dấu tự do (bật mặc định):** phím dấu có thể đặt ở bất kỳ vị trí nào sau nguyên âm trong từ. `tieengs`, `tiesng`, `tieesng` đều ra `tiếng`. `nguoiwf` và `nguwowif` đều ra `người`.
+- **Gõ dấu tự do (bật mặc định):** phím dấu có thể đặt ở bất kỳ vị trí nào sau nguyên âm trong từ. `tieengs` và `tieesng` đều ra `tiếng`. `nguoiwf` và `nguwowif` đều ra `người`.
 - **Đổi dấu:** gõ phím dấu khác thì thay dấu cũ. `asf` → `à`.
 
 #### c) Hủy biến đổi bằng cách gõ lặp phím
@@ -191,7 +191,8 @@ Tương đương tùy chọn "Bật kiểm tra chính tả" + "Tự động khô
 | `function` | `function` | Không hợp lệ |
 | `const` | `const` | Không hợp lệ |
 | `width` | `width` | Không hợp lệ |
-| `viet` + `j` | `việt` | Hợp lệ |
+| `vieetj` | `việt` | Hợp lệ |
+| `vietj` | `vietj` | Thiếu `e` thứ hai: `viẹt` sai chính tả, khôi phục |
 
 - Danh sách ngoại lệ: các từ tiếng Anh *trùng với âm tiết tiếng Việt hợp lệ* (`as`, `is`, `of`, `if`…) **không** tự khôi phục. Đây là hạn chế đã biết, giống UniKey; người dùng gõ lặp phím (`ass`) hoặc chuyển sang English. Xem xét whitelist từ tiếng Anh ở P2.
 
