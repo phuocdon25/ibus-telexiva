@@ -64,15 +64,9 @@ def main():
                 continue
             check(cid, k, word, note="chuẩn" if k in keys_of(std) else "biến thể")
 
-    # 6. Vị trí dấu. Ghi chú: file gốc đảo nhãn TP-01..04 — hòa/thủy là kiểu CŨ, hoà/thuỷ là kiểu MỚI.
+    # 6. Vị trí dấu: cột "Cấu hình" chọn kiểu đặt dấu (hòa = kiểu cũ, hoà = kiểu mới).
     for cid, inp, exp, conf in rows(md, "6."):
-        k = keys_of(inp)[0]
-        if exp in ("hoà", "thuỷ"):
-            check(cid, k, exp, new_style=True, note="kiểu mới (file ghi nhầm là kiểu cũ)")
-        elif exp in ("hòa", "thủy"):
-            check(cid, k, exp, new_style=False, note="kiểu cũ (file ghi nhầm là kiểu mới)")
-        else:
-            check(cid, k, exp)
+        check(cid, keys_of(inp)[0], exp, new_style="kiểu mới" in conf.lower(), note=conf)
 
     # 7. Thay đổi dấu: các ca có kết quả rõ ràng
     for cid, keys, exp in [("CT-01", "asf", "à"), ("CT-02", "asr", "ả"), ("CT-03", "asx", "ã"),

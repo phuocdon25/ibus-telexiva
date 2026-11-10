@@ -101,10 +101,10 @@
 
 | ID | Input | Expected | Cấu hình |
 |---|---|---|---|
-| TP-01 | `hoaf` | hòa | Dấu kiểu mới |
-| TP-02 | `hoaf` | hoà | Dấu kiểu cũ |
-| TP-03 | `thuyr` | thủy | Dấu kiểu mới |
-| TP-04 | `thuyr` | thuỷ | Dấu kiểu cũ |
+| TP-01 | `hoaf` | hòa | Dấu kiểu cũ |
+| TP-02 | `hoaf` | hoà | Dấu kiểu mới |
+| TP-03 | `thuyr` | thủy | Dấu kiểu cũ |
+| TP-04 | `thuyr` | thuỷ | Dấu kiểu mới |
 | TP-05 | `quas` | quá | Quy tắc qu |
 | TP-06 | `gias` | giá | Quy tắc gi |
 | TP-07 | `gif` | gì | Quy tắc gi |
