@@ -165,9 +165,10 @@ class TelexivaProtoEngine(IBus.Engine):
                           len(self.shown.encode("utf-8")) - len(self.shown))
                 return True
         if not ok:
-            # Mặc định chỉ log độ dài, không log nội dung.
+            # Mặc định chỉ log độ dài và vị trí, không log nội dung.
             self._log("guard mismatch mode=%s before_len=%d cursor=%d anchor=%d shown_len=%d",
                      mode, len(before), cursor, anchor, len(self.shown))
+            self._log("guard diag %s", self._diag(full, cursor, anchor))
             if self.cfg.get("debug_text") == "yes":
                 # CHỈ bật tạm thời khi người dùng đồng ý, để chẩn đoán lỗi guard.
                 lo, hi = max(0, min(cursor, anchor) - 20), max(cursor, anchor) + 20
@@ -176,6 +177,32 @@ class TelexivaProtoEngine(IBus.Engine):
                           full[lo:hi], cursor - lo, anchor - lo, self.shown, self.recent,
                           len(full), len(full.encode("utf-8")))
         return ok or mode == "log"
+
+    def _diag(self, full: str, cursor: int, anchor: int) -> str:
+        """Mô tả bằng CON SỐ (không chứa chữ) vị trí của từ đang gõ trong surrounding text.
+
+        end_rel_cursor = vị trí kết thúc của lần xuất hiện gần con trỏ nhất, trừ cursor.
+        Ví dụ +3 nghĩa là từ đang gõ thật ra kết thúc ở cursor+3.
+        """
+        import unicodedata
+        parts = []
+        for label, word in [("shown", self.shown)] + [(f"recent{i}", w) for i, w in enumerate(self.recent)]:
+            if not word:
+                continue
+            hits = []
+            start = full.find(word)
+            while start != -1:
+                hits.append(start + len(word))
+                start = full.find(word, start + 1)
+            if hits:
+                end = min(hits, key=lambda e: abs(e - cursor))
+                parts.append(f"{label}:found={len(hits)} end_rel_cursor={end - cursor:+d} "
+                             f"end_rel_anchor={end - anchor:+d}")
+            else:
+                nfd = unicodedata.normalize("NFD", word) in unicodedata.normalize("NFD", full)
+                parts.append(f"{label}:found=0 nfd_found={nfd}")
+        parts.append(f"full_len={len(full)} cursor_ok={0 <= cursor <= len(full)}")
+        return " | ".join(parts)
 
     # ---- thay chữ ----
 
