@@ -35,6 +35,8 @@ class FakeApp:
         self.preedit_mode = False
         self.pending_verify = None
         self.inflight = None
+        self.waiting = False
+        self.key_queue = []
         self.prev_char = ""
         self.last_edit_at = 0.0
         self.awaiting_confirm = None
@@ -88,6 +90,8 @@ class FakeApp:
 
 
 # Mượn logic của engine thật.
+# (Ô nhập giả không gửi set_surrounding_text nên không đợi xác nhận; phần đợi được
+#  kiểm tra riêng trong test_wait_confirm_queues_keys.)
 for _name, _fn in T.TelexivaProtoEngine.__dict__.items():
     if callable(_fn) and (_name.startswith("do_") or _name.startswith("_")) and not _name.startswith("__"):
         setattr(FakeApp, _name, _fn)
@@ -240,6 +244,21 @@ class EngineSim(unittest.TestCase):
         # Dấu câu thông thường + khoảng trắng không phải ngữ cảnh code.
         self.assertEqual(FakeApp().type("xong. Tieeps tucj, nhes! ").buf, "xong. Tiếp tục, nhé! ")
         self.assertEqual(FakeApp().type("(vieejt) ").buf, "(việt) ")
+
+    def test_wait_confirm_queues_keys(self):
+        # Mô phỏng: lần sửa trước chưa được xác nhận, phím "o" đến trong lúc đợi.
+        app = FakeApp()
+        app.waiting = False
+        app.key_queue = []
+        app.type("truongw")                     # -> "trương"
+        self.assertEqual(app.buf, "trương")
+        # Trong lúc đợi, phím mới bị xếp hàng và được xử lý lại sau, đúng thứ tự.
+        app.waiting = True
+        self.assertTrue(app.do_process_key_event(IBus.unicode_to_keyval("f"), 0, 0))
+        self.assertEqual(app.key_queue, [(IBus.unicode_to_keyval("f"), 0, 0)])
+        app.waiting = False
+        app._drain_queue()
+        self.assertEqual(app.buf, "trường")
 
     def test_password_untouched(self):
         app = FakeApp()

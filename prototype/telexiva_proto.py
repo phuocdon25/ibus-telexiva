@@ -119,6 +119,8 @@ class TelexivaProtoEngine(IBus.Engine):
         self.inflight = None         # (chữ sau khi xóa, chưa chèn; thời điểm) của lần sửa gần nhất
         self.last_edit_at = 0.0      # thời điểm lần sửa S2 gần nhất
         self.awaiting_confirm = None # thời điểm gửi lần sửa chưa được ô nhập xác nhận
+        self.waiting = False         # đang đợi ô nhập xác nhận (vòng lặp sự kiện lồng nhau)
+        self.key_queue = []          # phím đến trong lúc đợi, xử lý lại theo thứ tự
         self._log("engine created cfg=%s", self.cfg)
 
     def _log(self, fmt: str, *args):
@@ -239,6 +241,8 @@ class TelexivaProtoEngine(IBus.Engine):
         while p < min(len(old), len(new)) and old[p] == new[p]:
             p += 1
         n_del, ins = len(old) - p, new[p:]
+        if n_del and self._strategy() == "s2":
+            self._wait_confirm()
         if n_del and not self._guard_ok():
             return False
         if n_del:
@@ -368,6 +372,55 @@ class TelexivaProtoEngine(IBus.Engine):
     # ---- IBus callbacks ----
 
     def do_process_key_event(self, keyval, keycode, state):
+        if self.waiting:
+            # Phím đến trong lúc đang đợi xác nhận: giữ lại, xử lý sau đúng thứ tự.
+            if state & IBus.ModifierType.RELEASE_MASK:
+                return bool(self.key_queue)
+            self.key_queue.append((keyval, keycode, state))
+            return True
+        handled = self._handle_key(keyval, keycode, state)
+        self._drain_queue()
+        return handled
+
+    def _drain_queue(self):
+        while self.key_queue:
+            keyval, keycode, state = self.key_queue.pop(0)
+            if self._handle_key(keyval, keycode, state):
+                continue
+            # Phím lẽ ra đi thẳng nhưng đã bị giữ lại: chèn bằng commit (chữ, số, dấu câu).
+            ch = IBus.keyval_to_unicode(keyval) or ""
+            if len(ch) == 1 and ch.isprintable() and not state & SHORTCUT_MASK:
+                self.commit_text(IBus.Text.new_from_string(ch))
+            else:
+                self.forward_key_event(keyval, keycode, state)
+            self._log("queued key replayed passthrough=%s", "commit" if ch.isprintable() else "forward")
+
+    def _wait_confirm(self, max_ms: float = 30.0):
+        """Đợi ô nhập xác nhận lần sửa trước (set_surrounding_text), tối đa max_ms.
+
+        Hai lần sửa quá sát nhau (< ~13 ms) làm ô nhập bỏ lệnh xóa thứ hai
+        (truongw + o -> "trươnguongwo"). Vòng lặp sự kiện lồng nhau cho phép nhận
+        set_surrounding_text; phím đến trong lúc này được xếp hàng (do_process_key_event).
+        """
+        if self.awaiting_confirm is None:
+            return
+        if (time.monotonic() - self.awaiting_confirm) * 1000 > 200:
+            self.awaiting_confirm = None   # quá cũ: ô nhập không gửi xác nhận, bỏ qua
+            return
+        start = time.monotonic()
+        ctx = GLib.MainContext.default()
+        self.waiting = True
+        try:
+            while self.awaiting_confirm is not None and (time.monotonic() - start) * 1000 < max_ms:
+                if not ctx.iteration(False):
+                    time.sleep(0.0005)
+        finally:
+            self.waiting = False
+        self._log("wait_confirm waited_ms=%.1f confirmed=%s queued=%d",
+                  (time.monotonic() - start) * 1000, self.awaiting_confirm is None, len(self.key_queue))
+        self.awaiting_confirm = None
+
+    def _handle_key(self, keyval, keycode, state):
         if state & IBus.ModifierType.RELEASE_MASK:
             return False
         if self.purpose in (IBus.InputPurpose.PASSWORD, IBus.InputPurpose.PIN):
