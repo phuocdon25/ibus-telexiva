@@ -19,7 +19,7 @@ sed "s#@SCRIPT@#$SCRIPT#" "$HERE/telexiva-proto.xml.in" > "$TMP"
 echo "Chép file khai báo engine vào $TARGET (cần sudo)…"
 sudo install -m 644 "$TMP" "$TARGET"
 
-ibus write-cache
+# Không cần `ibus write-cache`: daemon tự quét lại component khi khởi động lại.
 ibus restart
 echo
 echo "Xong. Thêm bộ gõ: Settings → Keyboard → Input Sources → + → Vietnamese → Telexiva (prototype)"

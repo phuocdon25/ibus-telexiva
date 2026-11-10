@@ -7,6 +7,5 @@ if [[ -f "$TARGET" ]]; then
   echo "Xóa $TARGET (cần sudo)…"
   sudo rm -f "$TARGET"
 fi
-ibus write-cache
 ibus restart
 echo "Đã gỡ. Log cũ (nếu muốn xóa): rm -rf ~/.cache/telexiva-proto"
