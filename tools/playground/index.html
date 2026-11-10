@@ -189,7 +189,7 @@
         <tbody id="log"></tbody>
       </table>
     </div>
-    <div class="hint">Log chỉ nằm trong tab này, không gửi đi đâu. Ô mật khẩu không bao giờ ghi nội dung. "value sau event" được đọc ở microtask kế tiếp.</div>
+    <div class="hint">Log chỉ nằm trong tab này, không gửi đi đâu. Ô mật khẩu không bao giờ ghi nội dung. "value sau event" được đọc ở task kế tiếp, sau khi trang đã xử lý xong event.</div>
   </section>
 </main>
 
@@ -262,7 +262,8 @@ function addRow(entry) {
 function record(el, field, ev) {
   const base = { t: now(), field, type: ev.type, key: "", data: null, composing: !!ev.isComposing };
   if (ev.type.startsWith("key")) {
-    base.key = ev.key + (ev.repeat ? " (repeat)" : "");
+    // Chọn gợi ý datalist sinh keydown không có key: ghi rõ để khỏi nhầm.
+    base.key = ev.key === undefined ? "(chọn gợi ý)" : ev.key + (ev.repeat ? " (repeat)" : "");
     if (ev.key === "Process" || ev.keyCode === 229) base.key += " [IME]";
   } else if (ev.type === "beforeinput" || ev.type === "input") {
     base.key = ev.inputType || "";
@@ -271,13 +272,14 @@ function record(el, field, ev) {
     base.data = show(el, ev.data);
     base.composing = ev.type !== "compositionend";
   }
-  // Đọc value ở microtask kế tiếp để thấy kết quả sau khi trình duyệt áp dụng event.
-  queueMicrotask(() => {
+  // Đọc value ở task kế tiếp, sau khi mọi listener của trang (định dạng số, controlled…) đã chạy.
+  // Không dùng microtask: microtask chạy ngay sau listener này, trước các listener khác.
+  setTimeout(() => {
     base.value = show(el, readValue(el));
     base.caret = readCaret(el);
     addRow(base);
     updateState(el);
-  });
+  }, 0);
 }
 
 function updateState(el) {
