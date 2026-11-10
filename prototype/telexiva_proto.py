@@ -92,20 +92,28 @@ def _load_config() -> dict[str, str]:
 class TelexivaProtoEngine(IBus.Engine):
     __gtype_name__ = "TelexivaProtoEngine"
 
+    _next_id = 0
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        TelexivaProtoEngine._next_id += 1
+        self.iid = TelexivaProtoEngine._next_id   # mỗi input context một engine, để phân biệt trong log
+        self.client = "?"
         self.cfg = _load_config()
         self.caps = 0
         self.purpose = IBus.InputPurpose.FREE_FORM
         self.raw = ""     # các phím của từ hiện tại
         self.shown = ""   # chữ engine tin là đang nằm trong ứng dụng cho từ hiện tại
-        LOG.info("engine created cfg=%s", self.cfg)
+        self._log("engine created cfg=%s", self.cfg)
+
+    def _log(self, fmt: str, *args):
+        LOG.info("[%d %s] " + fmt, self.iid, self.client, *args)
 
     # ---- trạng thái ----
 
     def _reset(self, why: str):
         if self.raw:
-            LOG.info("reset why=%s word_len=%d", why, len(self.shown))
+            self._log("reset why=%s word_len=%d", why, len(self.shown))
         self.raw = ""
         self.shown = ""
 
@@ -119,6 +127,8 @@ class TelexivaProtoEngine(IBus.Engine):
         s = self.cfg.get("strategy", "auto")
         if s in ("s2", "s3"):
             return s
+        if self.purpose == IBus.InputPurpose.TERMINAL:
+            return "s3"   # terminal tự khai báo (ví dụ VTE): không tin surrounding text
         return "s2" if self._has_surrounding() else "s3"
 
     # ---- guard ----
@@ -133,7 +143,7 @@ class TelexivaProtoEngine(IBus.Engine):
         ok = cursor == anchor and before.endswith(self.shown)
         if not ok:
             # Chỉ log độ dài, không log nội dung.
-            LOG.info("guard mismatch mode=%s before_len=%d cursor=%d anchor=%d shown_len=%d",
+            self._log("guard mismatch mode=%s before_len=%d cursor=%d anchor=%d shown_len=%d",
                      mode, len(before), cursor, anchor, len(self.shown))
         return ok or mode == "log"
 
@@ -160,7 +170,7 @@ class TelexivaProtoEngine(IBus.Engine):
         if ins:
             self.commit_text(IBus.Text.new_from_string(ins))
         self.shown = new
-        LOG.info("replace strategy=%s del=%d ins=%d", strategy, n_del, len(ins))
+        self._log("replace strategy=%s del=%d ins=%d", strategy, n_del, len(ins))
         return True
 
     def _finish_word(self, why: str):
@@ -168,7 +178,7 @@ class TelexivaProtoEngine(IBus.Engine):
         if self.raw:
             final = finalize(self.raw, self._new_style())
             if final != self.shown:
-                LOG.info("finalize restore")
+                self._log("finalize restore")
                 self._replace(final)
         self._reset(why)
 
@@ -220,29 +230,38 @@ class TelexivaProtoEngine(IBus.Engine):
         self._reset("focus_in")
         # Yêu cầu client gửi surrounding text (IBus chỉ gửi khi engine đã hỏi).
         self.get_surrounding_text()
-        LOG.info("focus_in caps=0x%x surrounding=%s strategy=%s purpose=%s",
+        self._log("focus_in caps=0x%x surrounding=%s strategy=%s purpose=%s",
                  self.caps, self._has_surrounding(), self._strategy(), int(self.purpose))
 
     def do_focus_out(self):
         self._reset("focus_out")
+
+    # Khi engine được tạo với has_focus_id=True, IBus gọi các hàm *_id kèm tên client
+    # (ví dụ "gtk4-im:…", "wayland", "xim") thay cho focus_in/focus_out.
+    def do_focus_in_id(self, object_path, client):
+        self.client = client or "-"
+        self.do_focus_in()
+
+    def do_focus_out_id(self, object_path):
+        self.do_focus_out()
 
     def do_reset(self):
         self._reset("reset")
 
     def do_enable(self):
         self.get_surrounding_text()
-        LOG.info("enable")
+        self._log("enable")
 
     def do_disable(self):
         self._reset("disable")
 
     def do_set_capabilities(self, caps):
         self.caps = caps
-        LOG.info("set_capabilities caps=0x%x surrounding=%s", caps, self._has_surrounding())
+        self._log("set_capabilities caps=0x%x surrounding=%s", caps, self._has_surrounding())
 
     def do_set_content_type(self, purpose, hints):
         self.purpose = purpose
-        LOG.info("content_type purpose=%d hints=0x%x", int(purpose), int(hints))
+        self._log("content_type purpose=%d hints=0x%x", int(purpose), int(hints))
 
     def do_set_cursor_location(self, x, y, w, h):
         pass
@@ -256,6 +275,20 @@ def main():
         sys.exit(1)
     factory = IBus.Factory.new(bus.get_connection())
     factory.add_engine(ENGINE_NAME, GObject.type_from_name("TelexivaProtoEngine"))
+
+    counter = {"n": 0}
+
+    def create_engine(_factory, name):
+        # Tự tạo engine để bật has_focus_id (nhận tên client trong focus_in_id).
+        counter["n"] += 1
+        return TelexivaProtoEngine(
+            engine_name=name,
+            object_path=f"/org/freedesktop/IBus/Engine/TelexivaProto/{counter['n']}",
+            connection=bus.get_connection(),
+            has_focus_id=True,
+        )
+
+    factory.connect("create-engine", create_engine)
 
     if "--ibus" in sys.argv:
         bus.request_name(BUS_NAME, 0)

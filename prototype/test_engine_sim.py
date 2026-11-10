@@ -14,6 +14,8 @@ from gi.repository import IBus  # noqa: E402
 sys.argv = sys.argv[:1]
 import telexiva_proto as T  # noqa: E402
 
+T.LOG.disabled = True   # không ghi vào log thật của người dùng
+
 
 class _Text:
     def __init__(self, t):
@@ -29,6 +31,8 @@ class FakeApp:
     def __init__(self, surrounding=True):
         self.buf = ""
         self.passthrough = 0
+        self.iid = 0
+        self.client = "fake"
         self.cfg = {"strategy": "auto", "guard": "strict", "tone": "old"}
         self.caps = IBus.Capabilite.SURROUNDING_TEXT if surrounding else 0
         self.purpose = IBus.InputPurpose.FREE_FORM
