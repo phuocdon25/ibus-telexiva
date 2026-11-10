@@ -22,3 +22,6 @@ __pycache__/
 
 # Local Claude Code tooling (third-party design skills, not part of the project)
 .claude/
+
+# Log thô (có thể chứa nội dung người dùng gõ) — chỉ giữ local
+docs/findings/logs/
