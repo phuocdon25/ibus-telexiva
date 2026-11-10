@@ -28,7 +28,12 @@ class _Text:
 class FakeApp:
     """Ô nhập giả. surrounding=True ~ Chrome/GTK (S2); False ~ terminal (S3)."""
 
-    def __init__(self, surrounding=True):
+    def __init__(self, surrounding=True, ignores_delete=False):
+        self.ignores_delete = ignores_delete   # mô phỏng ô chat ChatGPT/Gemini
+        self.preedit = ""
+        self.hints = 0
+        self.preedit_mode = False
+        self.pending_verify = None
         self.buf = ""
         self.passthrough = 0
         self.iid = 0
@@ -47,7 +52,18 @@ class FakeApp:
         return _Text(self.buf), len(self.buf), len(self.buf)
 
     def delete_surrounding_text(self, offset, n):
-        self.buf = self.buf[: len(self.buf) + offset]
+        if not self.ignores_delete:
+            self.buf = self.buf[: len(self.buf) + offset]
+
+    def update_preedit_text_with_mode(self, text, cursor, visible, mode):
+        self.preedit = text.get_text()
+
+    def hide_preedit_text(self):
+        self.preedit = ""
+
+    def screen(self):
+        """Những gì người dùng nhìn thấy: chữ thật + phần nháp."""
+        return self.buf + self.preedit
 
     def forward_key_event(self, keyval, keycode, state):
         if keyval == IBus.KEY_BackSpace and not state & IBus.ModifierType.RELEASE_MASK:
@@ -134,6 +150,43 @@ class EngineSim(unittest.TestCase):
 
         app.get_surrounding_text = skewed
         self.assertEqual(app.type("dduowcj ").buf, "được ")
+
+    def test_field_ignoring_delete_switches_to_preedit(self):
+        # Ô kiểu ChatGPT bỏ qua delete_surrounding_text: từ đầu tiên sai (đã biết),
+        # engine phát hiện và các từ sau gõ bằng nháp -> đúng.
+        app = FakeApp(ignores_delete=True).type("taoj vaanx conf ")
+        self.assertEqual(app.buf, "taoạo vẫn còn ")
+        self.assertTrue(app.preedit_mode)
+
+    def test_preedit_mode_shows_draft_then_commits(self):
+        app = FakeApp(ignores_delete=True)
+        app.preedit_mode = True
+        app.type("dduowcj")
+        self.assertEqual(app.buf, "")
+        self.assertEqual(app.preedit, "được")
+        app.type(" ")
+        self.assertEqual(app.buf, "được ")
+        self.assertEqual(app.preedit, "")
+
+    def test_preedit_backspace_and_restore(self):
+        app = FakeApp()
+        app.preedit_mode = True
+        app.type("taoj")
+        app.do_process_key_event(IBus.KEY_BackSpace, 14, 0)
+        self.assertEqual(app.preedit, "tạ")
+        app.type(" text ")
+        self.assertEqual(app.buf, "tạ text ")
+
+    def test_focus_change_resets_preedit_mode(self):
+        app = FakeApp(ignores_delete=True).type("taoj vaanx ")
+        self.assertTrue(app.preedit_mode)
+        app.do_focus_in()
+        self.assertFalse(app.preedit_mode)
+
+    def test_normal_field_stays_without_preedit(self):
+        app = FakeApp().type("taoj vaanx conf ")
+        self.assertEqual(app.buf, "tạo vẫn còn ")
+        self.assertFalse(app.preedit_mode)
 
     def test_password_untouched(self):
         app = FakeApp()

@@ -106,6 +106,11 @@ class TelexivaProtoEngine(IBus.Engine):
         self.shown = ""   # chữ engine tin là đang nằm trong ứng dụng cho từ hiện tại
         self.frozen = False  # guard đã chặn: bỏ qua phần còn lại của từ
         self.recent = []  # các giá trị shown trước đó của từ này (ô nhập có thể báo trễ)
+        self.hints = 0
+        # Hướng 2: ô bỏ qua delete_surrounding_text (ô soạn thảo nâng cao như ChatGPT, Gemini)
+        # -> chuyển sang preedit cho tới khi focus sang ô khác.
+        self.preedit_mode = False
+        self.pending_verify = None   # kiểm tra lệnh xóa S2 vừa gửi có được áp dụng không
         self._log("engine created cfg=%s", self.cfg)
 
     def _log(self, fmt: str, *args):
@@ -134,8 +139,10 @@ class TelexivaProtoEngine(IBus.Engine):
 
     def _strategy(self) -> str:
         s = self.cfg.get("strategy", "auto")
-        if s in ("s2", "s3", "s3k"):
+        if s in ("s1", "s2", "s3", "s3k"):
             return s
+        if self.preedit_mode:
+            return "s1"
         if self.purpose == IBus.InputPurpose.TERMINAL:
             return "s3"   # terminal tự khai báo (ví dụ VTE): không tin surrounding text
         if self._has_surrounding():
@@ -234,8 +241,82 @@ class TelexivaProtoEngine(IBus.Engine):
             else:
                 self.commit_text(IBus.Text.new_from_string(ins))
         self._set_shown(new)
+        if strategy == "s2" and n_del:
+            # Ô bỏ qua lệnh xóa sẽ cho ra: chữ cũ + phần chèn (taoj -> "tao" + "ạo").
+            self.pending_verify = {"expect": new, "broken": old + ins, "tries": 3}
         self._log("replace strategy=%s del=%d ins=%d", strategy, n_del, len(ins))
         return True
+
+    def _check_pending_verify(self):
+        """Ở phím kế tiếp: xem lệnh xóa S2 trước đó có được ô nhập áp dụng không."""
+        pv = self.pending_verify
+        if not pv or not self._has_surrounding():
+            self.pending_verify = None
+            return
+        text, cursor, anchor = self.get_surrounding_text()
+        full = text.get_text() if text else ""
+        befores = {full[:cursor], full[:anchor]}
+        if any(b.endswith(pv["expect"]) for b in befores):
+            self.pending_verify = None
+            return
+        if any(b.endswith(pv["broken"]) for b in befores):
+            self.pending_verify = None
+            self.preedit_mode = True
+            # purpose/hints là "dấu vân tay" của ô, để sau này nhận diện trước (Bước 3).
+            self._log("s2_ignored -> preedit purpose=%d hints=0x%x", int(self.purpose), self.hints)
+            self._reset("s2_ignored")
+            return
+        pv["tries"] -= 1
+        if pv["tries"] <= 0:
+            self.pending_verify = None
+
+    # ---- preedit (S1) ----
+
+    def _show_preedit(self):
+        text = transform(self.raw, self._new_style())
+        t = IBus.Text.new_from_string(text)
+        t.append_attribute(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, 0, len(text))
+        # COMMIT: khi ô mất focus, IBus tự chốt phần nháp (giống ibus-unikey).
+        self.update_preedit_text_with_mode(t, len(text), True, IBus.PreeditFocusMode.COMMIT)
+        self.shown = text
+
+    def _commit_preedit(self, final: bool):
+        if self.raw:
+            text = finalize(self.raw, self._new_style()) if final else transform(self.raw, self._new_style())
+            self.hide_preedit_text()
+            self.commit_text(IBus.Text.new_from_string(text))
+        self.raw = ""
+        self.shown = ""
+
+    def _process_preedit(self, keyval, ch: str, is_letter: bool) -> bool:
+        if is_letter:
+            self.raw += ch
+            self._show_preedit()
+            return True
+        if keyval == IBus.KEY_BackSpace and self.raw:
+            # Xóa một ký tự đang hiển thị: bỏ phím cuối cho tới khi chữ ngắn đi.
+            target = self.shown[:-1]
+            popped = []
+            while self.raw and len(transform(self.raw, self._new_style())) >= len(self.shown):
+                popped.insert(0, self.raw[-1])
+                self.raw = self.raw[:-1]
+            # Giữ lại dấu/biến đổi của phần còn lại: tạo + Backspace -> tạ (không phải ta).
+            for k in popped:
+                if transform(self.raw + k, self._new_style()) == target:
+                    self.raw += k
+                    break
+            if self.raw:
+                self._show_preedit()
+            else:
+                self.hide_preedit_text()
+                self.shown = ""
+            return True
+        if keyval == IBus.KEY_Escape and self.raw:
+            self._commit_preedit(final=False)
+            return False
+        # Kết thúc từ, phím điều hướng, phím khác: chốt nháp rồi cho phím đi tiếp.
+        self._commit_preedit(final=True)
+        return False
 
     def _forward_key(self, keyval: int, keycode: int):
         self.forward_key_event(keyval, keycode, 0)
@@ -260,11 +341,18 @@ class TelexivaProtoEngine(IBus.Engine):
         if keyval in MODIFIER_KEYVALS:
             return False
         if state & SHORTCUT_MASK:
+            if self.preedit_mode and self.raw:
+                self._commit_preedit(final=True)
             self._reset("shortcut")
             return False
 
         ch = IBus.keyval_to_unicode(keyval) or ""   # PyGObject trả về str
         is_letter = len(ch) == 1 and ch.isascii() and (ch.isalpha() or ch in LETTER_EXTRA)
+
+        if self.pending_verify:
+            self._check_pending_verify()
+        if self._strategy() == "s1":
+            return self._process_preedit(keyval, ch, is_letter)
 
         if not is_letter:
             if keyval in WORD_END_KEYVALS or (len(ch) == 1 and ch.isprintable()):
@@ -283,6 +371,9 @@ class TelexivaProtoEngine(IBus.Engine):
             # Không biến đổi: để ứng dụng tự chèn phím, giống English.
             self.raw = raw
             self._set_shown(new)
+            if self.pending_verify:
+                self.pending_verify["expect"] += ch
+                self.pending_verify["broken"] += ch
             return False
 
         if self._replace(new):
@@ -297,10 +388,14 @@ class TelexivaProtoEngine(IBus.Engine):
 
     def do_focus_in(self):
         self._reset("focus_in")
+        if self.preedit_mode:
+            self._log("preedit_mode off (focus changed)")
+        self.preedit_mode = False      # ô mới: thử lại không nháp
+        self.pending_verify = None
         # Yêu cầu client gửi surrounding text (IBus chỉ gửi khi engine đã hỏi).
         self.get_surrounding_text()
-        self._log("focus_in caps=0x%x surrounding=%s strategy=%s purpose=%s",
-                 self.caps, self._has_surrounding(), self._strategy(), int(self.purpose))
+        self._log("focus_in caps=0x%x surrounding=%s strategy=%s purpose=%s hints=0x%x",
+                 self.caps, self._has_surrounding(), self._strategy(), int(self.purpose), self.hints)
 
     def do_focus_out(self):
         self._reset("focus_out")
@@ -330,6 +425,7 @@ class TelexivaProtoEngine(IBus.Engine):
 
     def do_set_content_type(self, purpose, hints):
         self.purpose = purpose
+        self.hints = int(hints)
         self._log("content_type purpose=%d hints=0x%x", int(purpose), int(hints))
 
     def do_set_cursor_location(self, x, y, w, h):
