@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 import sys
 from logging.handlers import RotatingFileHandler
 
@@ -111,6 +112,7 @@ class TelexivaProtoEngine(IBus.Engine):
         # -> chuyển sang preedit cho tới khi focus sang ô khác.
         self.preedit_mode = False
         self.pending_verify = None   # kiểm tra lệnh xóa S2 vừa gửi có được áp dụng không
+        self.inflight = None         # (chữ sau khi xóa, chưa chèn; thời điểm) của lần sửa gần nhất
         self._log("engine created cfg=%s", self.cfg)
 
     def _log(self, fmt: str, *args):
@@ -125,6 +127,7 @@ class TelexivaProtoEngine(IBus.Engine):
         self.shown = ""
         self.recent = []
         self.frozen = False
+        self.inflight = None
 
     def _set_shown(self, new: str):
         if new != self.shown:
@@ -165,7 +168,12 @@ class TelexivaProtoEngine(IBus.Engine):
         # - Bôi đen phía SAU con trỏ (inline autocomplete của omnibox) không ảnh hưởng: cho qua.
         # - Khi gõ nhanh, ô nhập có thể báo surrounding text trễ 1–2 phím: chấp nhận
         #   cả các trạng thái shown gần nhất.
-        candidates = [c for c in [self.shown] + self.recent if c] or [""]
+        candidates = [c for c in [self.shown] + self.recent if c]
+        # Ngay sau một lần sửa, ô nhập có thể báo trạng thái "đã xóa, chưa chèn"
+        # (xuoongs: báo "xu" trong khi engine đã gửi "xuôn"). Chấp nhận trong 0.5 giây.
+        if self.inflight and time.monotonic() - self.inflight[1] < 0.5 and self.inflight[0]:
+            candidates.append(self.inflight[0])
+        candidates = candidates or [""]
         ok = anchor >= cursor and any(before.endswith(c) for c in candidates)
         if not ok and anchor != cursor:
             # Một số client (VS Code/Electron trên GNOME Wayland) báo cursor và anchor lệch
@@ -227,6 +235,8 @@ class TelexivaProtoEngine(IBus.Engine):
         n_del, ins = len(old) - p, new[p:]
         if n_del and not self._guard_ok():
             return False
+        if n_del:
+            self.inflight = (old[:p], time.monotonic())
         strategy = self._strategy()
         if n_del:
             if strategy == "s2":

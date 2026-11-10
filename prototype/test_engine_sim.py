@@ -34,6 +34,7 @@ class FakeApp:
         self.hints = 0
         self.preedit_mode = False
         self.pending_verify = None
+        self.inflight = None
         self.buf = ""
         self.passthrough = 0
         self.iid = 0
@@ -187,6 +188,29 @@ class EngineSim(unittest.TestCase):
         app = FakeApp().type("taoj vaanx conf ")
         self.assertEqual(app.buf, "tạo vẫn còn ")
         self.assertFalse(app.preedit_mode)
+
+    def test_surrounding_reports_deleted_not_yet_inserted(self):
+        # Ngay sau lần sửa, ô báo trạng thái "đã xóa, chưa chèn" (xuoongs -> ô báo "xu")
+        # trong suốt phím kế tiếp.
+        app = FakeApp()
+        real_delete = app.delete_surrounding_text
+        app.mid = None
+        app.stale = None
+
+        def delete(offset, n):
+            real_delete(offset, n)
+            app.mid = app.buf          # ảnh chụp ngay sau khi xóa, trước khi chèn
+
+        def surrounding():
+            t = app.stale if app.stale is not None else app.buf
+            return _Text(t), len(t), len(t)
+
+        app.delete_surrounding_text = delete
+        app.get_surrounding_text = surrounding
+        for c in "xuongos xuoongs ":
+            app.stale, app.mid = app.mid, None   # phím này thấy ảnh chụp của phím trước
+            app.type(c)
+        self.assertEqual(app.buf, "xuống xuống ")
 
     def test_password_untouched(self):
         app = FakeApp()
