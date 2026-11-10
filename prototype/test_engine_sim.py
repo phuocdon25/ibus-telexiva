@@ -123,6 +123,18 @@ class EngineSim(unittest.TestCase):
         app.get_surrounding_text = lambda: (_Text(app.buf + "calhost"), len(app.buf), len(app.buf) + 7)
         self.assertEqual(app.type("looi").buf, "lôi")
 
+    def test_cursor_reported_in_bytes(self):
+        # VS Code trên GNOME Wayland: cursor lệch nhỏ hơn anchor đúng bằng số byte dư
+        # của chữ có dấu, dù không có vùng chọn. Vẫn phải ra "được".
+        app = FakeApp()
+
+        def skewed():
+            extra = len(app.buf.encode("utf-8")) - len(app.buf)
+            return _Text(app.buf), len(app.buf) - extra, len(app.buf)
+
+        app.get_surrounding_text = skewed
+        self.assertEqual(app.type("dduowcj ").buf, "được ")
+
     def test_password_untouched(self):
         app = FakeApp()
         app.purpose = IBus.InputPurpose.PASSWORD

@@ -51,6 +51,11 @@ class TelexFinal(unittest.TestCase):
         "đây": ["ddaay", "daday", "daayd"],
         "mượn": ["muownj", "muonwj", "mwonj"],
         "thuở": ["thuowr", "thuwor"],
+        "chưa": ["chuaw", "chuwa"],
+        "mưa": ["muaw", "muwa"],
+        "cửa": ["cuawr", "cuwar", "cuarw"],
+        "quăng": ["quawng", "quangw"],
+        "hoặc": ["hoawcj", "hoacjw"],
     }
 
     def test_typing_orders(self):

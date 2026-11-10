@@ -153,12 +153,19 @@ def _apply_keys(keys: str):
                     if chars[i].c != new:
                         chars[i].c, chars[i].src = new, "w"
                 continue
-            # 2) a/o/u chưa biến đổi gần cuối nhất -> ă/ơ/ư.
+            # 2) a/o/u chưa biến đổi -> ă/ơ/ư. Ưu tiên lựa chọn cho ra vần hợp lệ
+            #    (chuaw -> chưa, không phải chuă; quaw -> quă vì "qu" là phụ âm đầu).
+            options = [i for i in reversed(vi)
+                       if chars[i].c in ("a", "o", "u") and not (pair and i in pair)]
             target = None
-            for i in reversed(vi):
-                if chars[i].c in ("a", "o", "u") and not (pair and i in pair):
+            for i in options:
+                trial = [ch.c for ch in chars]
+                trial[i] = {"a": "ă", "o": "ơ", "u": "ư"}[trial[i]]
+                if _nucleus_could_be("".join(trial)):
                     target = i
                     break
+            if target is None and options:
+                target = options[0]
             if target is not None:
                 chars[target].c = {"a": "ă", "o": "ơ", "u": "ư"}[chars[target].c]
                 chars[target].src = "w"
@@ -234,6 +241,15 @@ def _could_be_syllable(s: str) -> bool:
         and final in FINAL_PREFIXES
         and not (final and nucleus in OPEN_ONLY)
     )
+
+
+NUCLEUS_PREFIXES = {n[:i] for n in NUCLEI for i in range(len(n) + 1)}
+
+
+def _nucleus_could_be(s: str) -> bool:
+    """Vần (giữ nguyên dấu mũ/móc) có thể là phần đầu của một vần hợp lệ không."""
+    parts = _split(s)
+    return parts is not None and parts[1] in NUCLEUS_PREFIXES
 
 
 def _tone_index(nucleus: str, has_final: bool, new_style: bool) -> int:

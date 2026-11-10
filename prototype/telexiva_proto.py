@@ -148,19 +148,28 @@ class TelexivaProtoEngine(IBus.Engine):
         if mode == "off" or not self._has_surrounding():
             return True
         text, cursor, anchor = self.get_surrounding_text()
-        before = text.get_text()[:cursor] if text else ""
+        full = text.get_text() if text else ""
+        before = full[:cursor]
         # - Bôi đen phía SAU con trỏ (inline autocomplete của omnibox) không ảnh hưởng: cho qua.
         # - Khi gõ nhanh, ô nhập có thể báo surrounding text trễ 1–2 phím: chấp nhận
         #   cả các trạng thái shown gần nhất.
         candidates = [c for c in [self.shown] + self.recent if c] or [""]
         ok = anchor >= cursor and any(before.endswith(c) for c in candidates)
+        if not ok and anchor != cursor:
+            # Một số client (VS Code/Electron trên GNOME Wayland) báo cursor và anchor lệch
+            # nhau đúng bằng số byte dư của chữ có dấu, dù không có vùng chọn. Thử đối chiếu
+            # theo anchor; log lại để kiểm chứng giả thuyết (không ghi nội dung).
+            if any(full[:anchor].endswith(c) for c in candidates):
+                self._log("guard matched_by=anchor cursor=%d anchor=%d shown_len=%d utf8_extra=%d",
+                          cursor, anchor, len(self.shown),
+                          len(self.shown.encode("utf-8")) - len(self.shown))
+                return True
         if not ok:
             # Mặc định chỉ log độ dài, không log nội dung.
             self._log("guard mismatch mode=%s before_len=%d cursor=%d anchor=%d shown_len=%d",
                      mode, len(before), cursor, anchor, len(self.shown))
             if self.cfg.get("debug_text") == "yes":
                 # CHỈ bật tạm thời khi người dùng đồng ý, để chẩn đoán lỗi guard.
-                full = text.get_text() if text else ""
                 lo, hi = max(0, min(cursor, anchor) - 20), max(cursor, anchor) + 20
                 self._log("DEBUG_TEXT window=%r cursor_in_window=%d anchor_in_window=%d "
                           "shown=%r recent=%r full_len=%d utf8_len=%d",
