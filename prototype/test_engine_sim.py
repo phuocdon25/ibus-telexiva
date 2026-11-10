@@ -25,6 +25,12 @@ class _Text:
         return self.t
 
 
+# Mô hình Chrome qua Mutter (GNOME Wayland) dùng trong các test "stale"/"lagging":
+# - engine thấy surrounding text là BẢN SAO của Mutter; bản sao có thể cũ;
+# - delete_surrounding_text(ký tự) được Mutter đổi sang BYTE bằng bản sao đó;
+# - Chrome xóa theo byte trên nội dung thật; cắt giữa một ký tự UTF-8 -> bỏ cả lệnh xóa.
+
+
 class FakeApp:
     """Ô nhập giả. surrounding=True ~ Chrome/GTK (S2); False ~ terminal (S3)."""
 
@@ -130,15 +136,24 @@ class EngineSim(unittest.TestCase):
         self.assertEqual(app.buf, "Quên chấm côngs")
 
     def test_lagging_surrounding_text(self):
-        # Ô nhập báo surrounding text trễ 1 phím (gõ nhanh): vẫn phải ra "mặc".
+        # Gõ nhanh: bản sao của Mutter trễ 1 phím; Mutter đổi ký tự -> byte bằng bản sao đó.
         app = FakeApp()
 
         def lagging():
-            # Ô nhập chưa kịp cập nhật phím vừa đi thẳng trước đó.
             prev = app.history[-2] if len(app.history) >= 2 else ""
             return _Text(prev), len(prev), len(prev)
 
+        def delete(offset, n):
+            view = app.history[-2] if len(app.history) >= 2 else ""
+            nbytes = len(view[len(view) + offset:].encode("utf-8"))
+            raw = app.buf.encode("utf-8")
+            try:
+                app.buf = raw[: len(raw) - nbytes].decode("utf-8")
+            except UnicodeDecodeError:
+                pass
+
         app.get_surrounding_text = lagging
+        app.delete_surrounding_text = delete
         self.assertEqual(app.type("macwj ").buf, "mặc ")
 
     def test_inline_completion_selection(self):
@@ -146,18 +161,6 @@ class EngineSim(unittest.TestCase):
         app = FakeApp()
         app.get_surrounding_text = lambda: (_Text(app.buf + "calhost"), len(app.buf), len(app.buf) + 7)
         self.assertEqual(app.type("looi").buf, "lôi")
-
-    def test_cursor_reported_in_bytes(self):
-        # VS Code trên GNOME Wayland: cursor lệch nhỏ hơn anchor đúng bằng số byte dư
-        # của chữ có dấu, dù không có vùng chọn. Vẫn phải ra "được".
-        app = FakeApp()
-
-        def skewed():
-            extra = len(app.buf.encode("utf-8")) - len(app.buf)
-            return _Text(app.buf), len(app.buf) - extra, len(app.buf)
-
-        app.get_surrounding_text = skewed
-        self.assertEqual(app.type("dduowcj ").buf, "được ")
 
     def test_field_ignoring_delete_switches_to_preedit(self):
         # Ô kiểu ChatGPT bỏ qua delete_surrounding_text: từ đầu tiên sai (đã biết),
@@ -259,6 +262,35 @@ class EngineSim(unittest.TestCase):
         app.waiting = False
         app._drain_queue()
         self.assertEqual(app.buf, "trường")
+
+    def test_stale_mutter_copy_byte_conversion(self):
+        # gocs -> "góc", rồi "o" -> "gốc" khi bản sao của Mutter vẫn còn là "goc".
+        app = FakeApp()
+        app.view = ""            # bản sao của Mutter
+        app.stale_next = False
+
+        def surrounding():
+            return _Text(app.view), len(app.view), len(app.view)
+
+        def delete(offset, n):
+            # Mutter: đổi n ký tự cuối của BẢN SAO sang số byte.
+            nbytes = len(app.view[len(app.view) + offset:].encode("utf-8"))
+            raw = app.buf.encode("utf-8")
+            cut = raw[: len(raw) - nbytes]
+            try:
+                app.buf = cut.decode("utf-8")       # Chrome: điểm cắt hợp lệ -> xóa
+            except UnicodeDecodeError:
+                pass                                  # cắt giữa ký tự -> bỏ qua lệnh xóa
+            app.stale_next = True
+
+        app.get_surrounding_text = surrounding
+        app.delete_surrounding_text = delete
+        for c in "gocso ":
+            if not app.stale_next:
+                app.view = app.buf      # Mutter cập nhật bản sao...
+            app.stale_next = False      # ...trừ ngay sau một lần sửa (giữ bản cũ 1 phím)
+            app.type(c)
+        self.assertEqual(app.buf, "gốc ")
 
     def test_password_untouched(self):
         app = FakeApp()

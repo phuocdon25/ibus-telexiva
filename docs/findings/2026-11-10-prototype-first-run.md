@@ -50,3 +50,11 @@
 | S3k (gửi cả chữ mới bằng phím) trên Chrome XWayland | Thứ tự đúng nhưng Chrome bỏ qua keysym có dấu: `taoj` → `to`. |
 
 Kết luận: trên GNOME Wayland, xóa chữ chỉ có S2; ô soạn thảo nâng cao (ProseMirror…) bỏ qua S2. Hướng tiếp theo: tự phát hiện ô bỏ qua lệnh xóa và chuyển sang preedit (S1) cho ô đó. Bộ quy tắc Telex đã qua 38.378 ca từ danh sách Viet74K (`prototype/wordlist_check.py`).
+
+## Bổ sung: lệnh xóa bị bỏ qua khi bản sao của Mutter còn cũ (giả thuyết mạnh)
+
+Quan sát trên playground: `gocs` + `o` ra `gócốc`. Lần sửa thứ hai đến sau 33 ms, engine đã đợi 30 ms mà không nhận được surrounding text mới (`wait_confirm confirmed=False`), rồi lệnh xóa bị bỏ qua.
+
+Giả thuyết: Mutter đổi `delete_surrounding_text` (tính theo **ký tự**) sang **byte** bằng bản sao surrounding text của nó. Khi bản sao còn là trạng thái cũ (`goc`, toàn ASCII), "xóa 2 ký tự" thành 2 byte, trong khi thực tế phải xóa `óc` = 3 byte. Điểm cắt rơi vào giữa chữ `ó`, nên Chrome bỏ cả lệnh xóa. Giả thuyết này cũng giải thích `đuọcược`, `trươnguongwo`, và vì sao lỗi chỉ xảy ra khi phần bị xóa có chữ có dấu.
+
+Cách xử lý trong prototype: engine thấy đúng bản sao đó. Khi bản sao là một trạng thái cũ hoàn chỉnh của từ, engine chọn số ký tự sao cho Mutter đổi ra đúng số byte thật (log `delete_byte_compensated`). Mô phỏng `test_stale_mutter_copy_byte_conversion` tái hiện `gócốc` khi chưa sửa. **Cần xác nhận bằng log thực tế**, và kiểm chứng bằng mã nguồn Mutter ở Phase 2.

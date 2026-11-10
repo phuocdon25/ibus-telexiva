@@ -250,7 +250,8 @@ class TelexivaProtoEngine(IBus.Engine):
         strategy = self._strategy()
         if n_del:
             if strategy == "s2":
-                self.delete_surrounding_text(-n_del, n_del)
+                n_chars = self._mutter_safe_delete_count(old[p:])
+                self.delete_surrounding_text(-n_chars, n_chars)
             else:
                 for _ in range(n_del):
                     self._forward_key(IBus.KEY_BackSpace, KEYCODE_BACKSPACE)
@@ -355,6 +356,38 @@ class TelexivaProtoEngine(IBus.Engine):
         # Kết thúc từ, phím điều hướng, phím khác: chốt nháp rồi cho phím đi tiếp.
         self._commit_preedit(final=True)
         return False
+
+    def _mutter_safe_delete_count(self, to_delete: str):
+        """Số KÝ TỰ cần gửi trong delete_surrounding_text để xóa đúng `to_delete`.
+
+        Trên GNOME Wayland, Mutter đổi số ký tự sang số BYTE bằng bản sao surrounding text
+        của nó, rồi Chrome xóa theo byte. Nếu bản sao còn cũ (chưa có lần sửa trước) thì số
+        byte bị tính sai; khi điểm cắt rơi vào giữa một ký tự UTF-8, Chrome bỏ qua cả lệnh
+        xóa (gocs + o -> "gócốc"). Engine thấy đúng bản sao đó, nên chọn số ký tự k sao cho
+        k ký tự cuối của bản sao có cùng số byte với phần cần xóa thật.
+        """
+        if not self._has_surrounding():
+            return len(to_delete)
+        text, cursor, _ = self.get_surrounding_text()
+        view = (text.get_text() if text else "")[:cursor]
+        if view.endswith(to_delete):
+            return len(to_delete)          # bản sao đã mới: không cần bù
+        if self.inflight and self.inflight[0] and view.endswith(self.inflight[0]):
+            return len(to_delete)          # Mutter đang cập nhật dở ("đã xóa, chưa chèn")
+        if not any(r and view.endswith(r) for r in self.recent):
+            return len(to_delete)          # không nhận ra bản sao: giữ cách cũ (guard đã cho qua)
+        # Bản sao là một trạng thái cũ hoàn chỉnh của từ: bù theo byte.
+        want = len(to_delete.encode("utf-8"))
+        total = 0
+        for k in range(1, len(view) + 1):
+            total += len(view[-k].encode("utf-8"))
+            if total == want:
+                self._log("delete_byte_compensated chars=%d->%d bytes=%d", len(to_delete), k, want)
+                return k
+            if total > want:
+                break
+        self._log("delete_byte_mismatch want_bytes=%d view_len=%d", want, len(view))
+        return len(to_delete)
 
     def _forward_key(self, keyval: int, keycode: int):
         self.forward_key_event(keyval, keycode, 0)
