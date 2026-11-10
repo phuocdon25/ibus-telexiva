@@ -565,6 +565,8 @@ So sánh hành vi giữa `ibus-unikey`, Telexiva ở từng strategy và English
 
 ### Phase 1 — Telexiva Core
 
+**Trạng thái (2026-11-10): đang làm.** Đã có: `src/core` (C++20) chuyển từ prototype; bảng test dùng chung `tests/data/telex_cases.tsv`; test so khớp với prototype trên 225.966 chuỗi phím: **0 khác biệt**; tốc độ ~0,5 µs/lần gọi (NFR-001: < 0,1 ms), 4 MB RAM. Còn lại: API `EditAction` cho engine, fuzz test, benchmark chính thức, cân nhắc `ukengine` làm oracle thứ hai.
+
 Engine API (`EditAction`), state machine, mô hình âm tiết, Telex đầy đủ theo FR-001 (dùng bảng test của prototype làm chuẩn; cân nhắc `ukengine` của Unikey làm oracle so sánh tự động), kiểm tra chính tả và tự khôi phục, backspace/reset, unit test dạng bảng, fuzz, benchmark. **Deliverable:** core độc lập IBus, test xanh, đạt NFR-001 cho core.
 
 ### Phase 2 — IBus Engine (C++)

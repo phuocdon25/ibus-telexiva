@@ -2,7 +2,7 @@
 
 Bộ gõ tiếng Việt (Telex) cho Linux, chạy dưới dạng engine của [IBus](https://github.com/ibus/ibus). Mục tiêu là gõ giống UniKey trên Windows và ổn định trong trình duyệt và VS Code trên Ubuntu GNOME/Wayland.
 
-> **Trạng thái: thử nghiệm (Phase 0).** Repo hiện có bản prototype viết bằng Python để kiểm chứng thiết kế. Bản chính thức (C++20) chưa bắt đầu. Xem [requirement.md](requirement.md).
+> **Trạng thái: Phase 1 (core C++).** Bản prototype Python đang được dùng hằng ngày để kiểm chứng thiết kế. Core C++20 (quy tắc Telex) đã khớp hoàn toàn với prototype; engine IBus bằng C++ chưa có. Xem [requirement.md](requirement.md).
 
 ## Vì sao có dự án này
 
@@ -40,6 +40,17 @@ Gỡ cài đặt: xóa Telexiva khỏi Input Sources, rồi chạy `./prototype/
 
 Chi tiết về cấu hình và log nằm trong [prototype/README.md](prototype/README.md).
 
+## Build core C++
+
+Cần: `g++` (C++20), `cmake`, `ninja-build`, `catch2`; để chuẩn bị Phase 2 thì thêm `pkg-config` và `libibus-1.0-dev`.
+
+```bash
+cmake --preset debug && cmake --build --preset debug
+ctest --preset debug -LE slow                       # test nhanh (Catch2)
+ctest --preset debug                                # thêm test so khớp với prototype Python (~1 phút)
+echo vieejt | build/debug/telexiva-telex            # thử nhanh: in transform/finalize
+```
+
 ## Kiểm thử
 
 ```bash
@@ -56,6 +67,8 @@ Khi test thủ công trên trình duyệt, dùng [tools/playground/index.html](t
 |---|---|
 | [requirement.md](requirement.md) | Đặc tả, quyết định kiến trúc, lộ trình |
 | [docs/findings/](docs/findings/) | Kết quả các lần thử nghiệm |
+| [src/core/](src/core/) | Core C++20: quy tắc Telex, không phụ thuộc IBus |
+| [tests/](tests/) | Test Catch2, bảng test dùng chung (TSV), test so khớp C++ ↔ Python |
 | [prototype/](prototype/) | Engine IBus bằng Python (Phase 0) |
 | [tools/playground/](tools/playground/) | Trang HTML để test bộ gõ trên trình duyệt |
 | [vietnamese-telex-test-cases.md](vietnamese-telex-test-cases.md) | Bộ ca kiểm thử Telex |
