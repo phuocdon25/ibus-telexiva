@@ -49,7 +49,7 @@ NUCLEI = {
 OPEN_ONLY = {
     "ai", "ao", "au", "ay", "âu", "ây", "eo", "êu", "ia", "iu", "oi", "ôi",
     "ơi", "ua", "ui", "ưa", "ưi", "ưu", "iêu", "yêu", "oai", "oay", "oeo",
-    "uây", "uôi", "uya", "uyu", "ươi", "ươu",
+    "uây", "uôi", "uya", "uyu", "ươi", "ươu", "uơ",
 }
 # Bắt buộc có phụ âm cuối.
 NEED_FINAL = {"ă", "â", "iê", "yê", "uâ", "uô", "ươ", "oă", "uyê", "oo"}
@@ -60,6 +60,15 @@ def _strip(s: str) -> str:
 
 
 NUCLEUS_BASE_PREFIXES = {_strip(n)[:i] for n in NUCLEI for i in range(len(n) + 1)}
+# Vần (theo chữ gốc) có ít nhất một dạng được phép có phụ âm cuối: "ua" (uâ: huân), "oe"…
+CLOSABLE_BASES = {_strip(n) for n in NUCLEI if n not in OPEN_ONLY}
+
+
+def _open_only_now(nucleus: str) -> bool:
+    """Vần chắc chắn không thể có phụ âm cuối, kể cả khi thêm dấu mũ/móc sau này."""
+    if nucleus in OPEN_ONLY and any(c in HORN_DIACRITICS for c in nucleus):
+        return True
+    return _strip(nucleus) not in CLOSABLE_BASES
 
 
 class _Ch:
@@ -81,7 +90,12 @@ def _apply_keys(keys: str):
     def vowel_idx():
         return [i for i, ch in enumerate(chars) if ch.c in VOWELS]
 
-    for k in keys:
+    undo_idx = -1          # vị trí phím gõ lặp để hủy gần nhất
+    prev_blocked = 0
+    for idx, k in enumerate(keys):
+        if len(blocked) > prev_blocked:
+            undo_idx = idx - 1
+        prev_blocked = len(blocked)
         lo = k.lower()
         up = k != lo
 
@@ -130,8 +144,12 @@ def _apply_keys(keys: str):
                         hit = i
                         break
                 if hit is not None and chars[hit].c == lo:
-                    chars[hit].c = CIRCUMFLEX[lo]
-                    continue
+                    trial = [ch.c for ch in chars]
+                    trial[hit] = CIRCUMFLEX[lo]
+                    appended = "".join(ch.c for ch in chars) + lo
+                    if _nucleus_could_be("".join(trial)) or not _nucleus_could_be(appended):
+                        chars[hit].c = CIRCUMFLEX[lo]
+                        continue
                 if hit is not None and chars[hit].c == CIRCUMFLEX[lo]:
                     chars[hit].c = lo           # gõ lặp: hủy mũ
                     blocked.add(lo)
@@ -146,6 +164,8 @@ def _apply_keys(keys: str):
             # 1) Thử biến đổi: uo -> ươ, nếu còn ký tự chưa đổi.
             pair = None
             for a, b in zip(vi, vi[1:]):
+                if _is_qu_u(chars, a):
+                    continue   # chữ u của "qu" thuộc phụ âm đầu (quở, quới)
                 if b == a + 1 and chars[a].c in ("u", "ư") and chars[b].c in ("o", "ơ"):
                     pair = (a, b)
             if pair and (chars[pair[0]].c, chars[pair[1]].c) != ("ư", "ơ"):
@@ -199,7 +219,13 @@ def _apply_keys(keys: str):
 
         chars.append(_Ch(lo, up))
 
-    return chars, tone
+    if len(blocked) > prev_blocked:
+        undo_idx = len(keys) - 1
+    return chars, tone, undo_idx
+
+
+def _is_qu_u(chars, i: int) -> bool:
+    return i == 1 and chars[0].c == "q" and chars[1].c == "u"
 
 
 def _split(s: str):
@@ -239,7 +265,7 @@ def _could_be_syllable(s: str) -> bool:
     return (
         _strip(nucleus) in NUCLEUS_BASE_PREFIXES
         and final in FINAL_PREFIXES
-        and not (final and nucleus in OPEN_ONLY)
+        and not (final and _open_only_now(nucleus))
     )
 
 
@@ -250,6 +276,15 @@ def _nucleus_could_be(s: str) -> bool:
     """Vần (giữ nguyên dấu mũ/móc) có thể là phần đầu của một vần hợp lệ không."""
     parts = _split(s)
     return parts is not None and parts[1] in NUCLEUS_PREFIXES
+
+
+def _is_valid_syllable(s: str) -> bool:
+    parts = _split(s)
+    if parts is None:
+        return False
+    initial, nucleus, final = parts
+    return (nucleus in NUCLEI and (not final or final in FINALS)
+            and not (final and nucleus in OPEN_ONLY))
 
 
 def _tone_index(nucleus: str, has_final: bool, new_style: bool) -> int:
@@ -270,11 +305,13 @@ def _tone_index(nucleus: str, has_final: bool, new_style: bool) -> int:
 
 
 def _render(keys: str, strict: bool, new_style: bool) -> str:
-    chars, tone = _apply_keys(keys)
+    chars, tone, undo_idx = _apply_keys(keys)
     # Chuẩn hóa cặp u/o có móc để thứ tự đặt w không quan trọng:
     # - còn chữ phía sau -> "ươ" (được, người, mượn…)
     # - đứng cuối từ     -> "uơ" (thuở, huơ), vì "ươ" không bao giờ đứng cuối.
     for i in range(len(chars) - 1):
+        if _is_qu_u(chars, i):
+            continue
         pair = (chars[i].c, chars[i + 1].c)
         if pair in (("ư", "o"), ("u", "ơ"), ("ư", "ơ")):
             chars[i].c = "ư" if i + 2 < len(chars) else "u"
@@ -289,6 +326,11 @@ def _render(keys: str, strict: bool, new_style: bool) -> str:
     # Kết quả không có gì "tiếng Việt" (ví dụ sau khi gõ lặp để hủy: ass -> as, ww -> w):
     # giữ nguyên, không khôi phục về phím gốc.
     if not tone and plain.isascii():
+        # Gõ lặp để hủy ở phím cuối (ass -> as, ww -> w): giữ kết quả hủy.
+        # Nhưng nếu sau đó còn gõ tiếp và từ không phải tiếng Việt (error, effect):
+        # khôi phục nguyên chuỗi phím khi kết thúc từ.
+        if strict and 0 <= undo_idx < len(keys) - 1 and not _is_valid_syllable(plain):
+            return keys
         return cased(list(plain))
 
     parts = _split(plain)
@@ -310,7 +352,7 @@ def _render(keys: str, strict: bool, new_style: bool) -> str:
         ok = (
             _strip(nucleus) in NUCLEUS_BASE_PREFIXES
             and final in FINAL_PREFIXES
-            and not (final and nucleus in OPEN_ONLY)
+            and not (final and _open_only_now(nucleus))
             and not (final and final[0] in "cpt" and tone in (2, 3, 4))
         )
     if not ok:

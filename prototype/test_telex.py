@@ -30,6 +30,7 @@ class TelexFinal(unittest.TestCase):
         # tự khôi phục từ tiếng Anh
         ("text", "text"), ("class", "class"), ("for", "for"), ("function", "function"),
         ("const", "const"), ("width", "width"), ("vietj", "vietj"),
+        ("error", "error"), ("effect", "effect"), ("success", "success"), ("address", "address"),
         # không biến đổi
         ("lo", "lo"), ("Q", "Q"), ("localhost", "localhost"),
     ]
