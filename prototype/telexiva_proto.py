@@ -40,6 +40,9 @@ BUS_NAME = "org.freedesktop.IBus.TelexivaProto"
 KEYCODE_BACKSPACE = 14  # evdev
 
 LETTER_EXTRA = set("[]{}")
+# Từ đứng ngay sau các ký tự này được coi là code/URL/email: giữ nguyên, không biến đổi
+# (foo_bar, api/test, user@host, obj.test, $var, a=test).
+CODE_PREV_CHARS = set("_./@:\\$#=~<>")
 # Phím kết thúc từ và được chốt (khôi phục chính tả nếu cần) trước khi đi tiếp.
 WORD_END_KEYVALS = {IBus.KEY_space, IBus.KEY_Return, IBus.KEY_KP_Enter, IBus.KEY_Tab}
 # Phím chỉ làm mất ngữ cảnh: reset, không chốt.
@@ -108,6 +111,7 @@ class TelexivaProtoEngine(IBus.Engine):
         self.frozen = False  # guard đã chặn: bỏ qua phần còn lại của từ
         self.recent = []  # các giá trị shown trước đó của từ này (ô nhập có thể báo trễ)
         self.hints = 0
+        self.prev_char = ""          # ký tự không phải chữ gần nhất (để nhận ra ngữ cảnh code)
         # Hướng 2: ô bỏ qua delete_surrounding_text (ô soạn thảo nâng cao như ChatGPT, Gemini)
         # -> chuyển sang preedit cho tới khi focus sang ô khác.
         self.preedit_mode = False
@@ -263,6 +267,14 @@ class TelexivaProtoEngine(IBus.Engine):
         self._log("replace strategy=%s del=%d ins=%d", strategy, n_del, len(ins))
         return True
 
+    def _code_context(self) -> bool:
+        """Ký tự ngay trước từ mới có phải ký tự code (_ . / @ …) không."""
+        prev = self.prev_char
+        if not prev and self._has_surrounding():
+            text, cursor, _ = self.get_surrounding_text()
+            prev = (text.get_text() if text else "")[:cursor][-1:]
+        return prev in CODE_PREV_CHARS
+
     def _check_pending_verify(self):
         """Ở phím kế tiếp: xem lệnh xóa S2 trước đó có được ô nhập áp dụng không."""
         pv = self.pending_verify
@@ -373,11 +385,24 @@ class TelexivaProtoEngine(IBus.Engine):
 
         if self.pending_verify:
             self._check_pending_verify()
+        if not is_letter:
+            self.prev_char = ch if len(ch) == 1 and ch.isprintable() else ""
+        elif not self.raw and not self.frozen and self._code_context():
+            self.frozen = True
+            self._log("code_context -> giữ nguyên từ")
+        if self.frozen and is_letter:
+            return False
+
         if self._strategy() == "s1":
             return self._process_preedit(keyval, ch, is_letter)
 
         if not is_letter:
-            if keyval in WORD_END_KEYVALS or (len(ch) == 1 and ch.isprintable()):
+            if ch == "@" and self.raw and self.shown != self.raw and not self._strategy() == "s1":
+                # Phần trước @ của email không bao giờ có dấu tiếng Việt: test@ -> giữ "test".
+                self._log("email_local_part -> khôi phục phím gốc")
+                self._replace(self.raw)
+                self._reset("email")
+            elif keyval in WORD_END_KEYVALS or (len(ch) == 1 and ch.isprintable()):
                 self._finish_word("word_end")
             else:
                 self._reset("nav" if keyval in RESET_KEYVALS else "other")
@@ -410,6 +435,7 @@ class TelexivaProtoEngine(IBus.Engine):
 
     def do_focus_in(self):
         self._reset("focus_in")
+        self.prev_char = ""
         if self.preedit_mode:
             self._log("preedit_mode off (focus changed)")
         self.preedit_mode = False      # ô mới: thử lại không nháp

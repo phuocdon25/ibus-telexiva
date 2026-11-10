@@ -35,6 +35,7 @@ class FakeApp:
         self.preedit_mode = False
         self.pending_verify = None
         self.inflight = None
+        self.prev_char = ""
         self.last_edit_at = 0.0
         self.awaiting_confirm = None
         self.buf = ""
@@ -228,6 +229,17 @@ class EngineSim(unittest.TestCase):
         app.delete_surrounding_text = delete
         app.type("dduocjw ")
         self.assertFalse(app.preedit_mode)
+
+    def test_code_context_words_unchanged(self):
+        for text in ["foo_bar-baz ", "api/test ", "test@example.com ", "obj.test ",
+                     "$var ", "a=test ", "http://localhost:8081/test "]:
+            with self.subTest(text=text):
+                self.assertEqual(FakeApp().type(text).buf, text)
+
+    def test_vietnamese_after_punctuation_still_works(self):
+        # Dấu câu thông thường + khoảng trắng không phải ngữ cảnh code.
+        self.assertEqual(FakeApp().type("xong. Tieeps tucj, nhes! ").buf, "xong. Tiếp tục, nhé! ")
+        self.assertEqual(FakeApp().type("(vieejt) ").buf, "(việt) ")
 
     def test_password_untouched(self):
         app = FakeApp()

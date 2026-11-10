@@ -80,15 +80,16 @@ def main():
                            ("CT-09", "ass", "as")]:
         check(cid, keys, exp, note="theo hành vi UniKey")
 
-    # 9. Số, tiếng Anh, URL: gõ ở chế độ tiếng Việt, từng "từ" (tách theo khoảng trắng)
+    # 9. Số, tiếng Anh, URL: gõ CẢ CHUỖI qua engine (mô phỏng ô nhập), chế độ tiếng Việt,
+    #    để kiểm tra cả quy tắc ngữ cảnh code (foo_bar, api/test…).
+    import test_engine_sim as sim
     for cid, inp, _exp in rows(md, "9."):
         ks = keys_of(inp)
         if not ks:
             continue
         text = ks[0]
-        for word in re.findall(r"[A-Za-z\[\]{}]+|[^A-Za-z\[\]{}]+", text):
-            if re.match(r"[A-Za-z]", word):
-                check(cid, word, word, note=f"trong '{text}' (chế độ tiếng Việt)")
+        got = sim.FakeApp().type(text + " ").buf.rstrip(" ")
+        results.append((cid, text, text, got, got == text, "gõ cả chuỗi, chế độ tiếng Việt"))
 
     fails = [r for r in results if not r[4]]
     print(f"File: {os.path.relpath(path)}")
