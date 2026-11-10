@@ -149,9 +149,12 @@ class TelexivaProtoEngine(IBus.Engine):
         if self.preedit_mode:
             return "s1"
         if self.purpose == IBus.InputPurpose.TERMINAL:
-            return "s3"   # terminal tự khai báo (ví dụ VTE): không tin surrounding text
+            return "s1"   # terminal tự khai báo (ví dụ VTE): dùng nháp như ibus-unikey
         if self._has_surrounding():
             return "s2"
+        # Không có surrounding text (Ptyxis/GNOME Terminal…): S3 (Backspace giả) không tới
+        # được ứng dụng trên GNOME Wayland, nên dùng nháp.
+        return "s1"
         # Ghi chú thử nghiệm (Chrome XWayland, gtk3-im): s3 bị đảo thứ tự Backspace/commit
         # (taoj -> "taạ"); s3k (gửi cả chữ bằng phím) thì Chrome bỏ qua keysym có dấu
         # (taoj -> "to"). Cả hai không dùng được; s3k chỉ còn là tùy chọn thử nghiệm.
@@ -186,6 +189,12 @@ class TelexivaProtoEngine(IBus.Engine):
                           cursor, anchor, len(self.shown),
                           len(self.shown.encode("utf-8")) - len(self.shown))
                 return True
+        if not ok and anchor == cursor and len(before) < len(self.shown):
+            # Ô báo nội dung ngắn hơn cả chữ engine vừa gõ (terminal VS Code/xterm.js chỉ giữ
+            # ký tự cuối trong textarea ẩn): surrounding text không dùng được -> chuyển sang nháp.
+            self.preedit_mode = True
+            self._log("surrounding_too_short before_len=%d shown_len=%d -> preedit purpose=%d hints=0x%x",
+                      len(before), len(self.shown), int(self.purpose), self.hints)
         if not ok:
             # Mặc định chỉ log độ dài và vị trí, không log nội dung.
             self._log("guard mismatch mode=%s before_len=%d cursor=%d anchor=%d shown_len=%d",

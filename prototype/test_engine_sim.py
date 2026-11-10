@@ -229,6 +229,24 @@ class EngineSim(unittest.TestCase):
         app.type("dduocjw ")
         self.assertFalse(app.preedit_mode)
 
+    def test_terminal_without_surrounding_uses_preedit(self):
+        # Ptyxis/GNOME Terminal: không có surrounding text -> nháp, chốt khi Space.
+        app = FakeApp(surrounding=False).type("nguyeenx")
+        self.assertEqual(app.buf, "")
+        self.assertEqual(app.preedit, "nguyễn")
+        app.type(" ")
+        self.assertEqual(app.buf, "nguyễn ")
+
+    def test_vscode_terminal_short_surrounding_switches_to_preedit(self):
+        # xterm.js: textarea ẩn chỉ giữ ký tự cuối, bỏ qua lệnh xóa.
+        app = FakeApp(ignores_delete=True)
+        app.get_surrounding_text = lambda: (_Text(app.buf[-1:]), len(app.buf[-1:]), len(app.buf[-1:]))
+        app.type("nguyeenx ")
+        self.assertTrue(app.preedit_mode)
+        start = len(app.buf)
+        app.type("vieejt ")
+        self.assertEqual(app.buf[start:], "việt ")
+
     def test_password_untouched(self):
         app = FakeApp()
         app.purpose = IBus.InputPurpose.PASSWORD
