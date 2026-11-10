@@ -15,7 +15,7 @@
 | GUI Framework | Settings app: GTK4/libadwaita hoặc Qt6 (chốt ở Phase 4) |
 | Build System | CMake + Ninja |
 | Project Type | Open Source |
-| License | Đề xuất GPL-3.0-or-later (cần chốt, xem §15) |
+| License | GPL-3.0-or-later (đã chốt 2026-11-10) |
 | Status | Planning |
 
 ### Lịch sử thay đổi
@@ -622,7 +622,7 @@ VNI (FR-002), gõ tắt (FR-012), whitelist từ tiếng Anh, frontend Fcitx5 ch
 | # | Câu hỏi | Chốt khi |
 |---|---|---|
 | Q1 | ~~Framework: Fcitx5 hay IBus?~~ **Đã chốt: IBus** (§6.0) | v0.3.0 |
-| Q2 | License: GPL-3.0-or-later? (bắt buộc nếu tham khảo mã UniKey/Bamboo) | Trước commit đầu tiên |
+| Q2 | ~~License: GPL-3.0-or-later?~~ **Đã chốt: GPL-3.0-or-later** | 2026-11-10 |
 | Q3 | URL thật để tái hiện BUG-001 | Phase 0 |
 | Q4 | Chrome native Wayland có hỗ trợ surrounding text qua IBus không? | Phase 0 (prototype) |
 | Q5 | Phím tắt mặc định `Ctrl+Shift` có xung đột thực tế trong VS Code không? | Phase 2 |
