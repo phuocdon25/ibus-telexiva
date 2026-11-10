@@ -265,7 +265,7 @@ class TelexivaProtoEngine(IBus.Engine):
         if strategy == "s2" and n_del:
             # Ô bỏ qua lệnh xóa sẽ cho ra: chữ cũ + phần chèn (taoj -> "tao" + "ạo").
             now = time.monotonic()
-            self.pending_verify = {"expect": new, "broken": old + ins, "tries": 3,
+            self.pending_verify = {"expect": new, "broken": old + ins, "ins": ins, "tries": 3,
                                    "gap_ms": (now - self.last_edit_at) * 1000}
             self.last_edit_at = now
             self.awaiting_confirm = now
@@ -292,22 +292,29 @@ class TelexivaProtoEngine(IBus.Engine):
         if any(b.endswith(pv["expect"]) for b in befores):
             self.pending_verify = None
             return
-        if any(b.endswith(pv["broken"]) for b in befores):
-            self.pending_verify = None
-            if pv["gap_ms"] < 150:
-                # Hai lần sửa quá sát nhau: ô chưa xử lý xong lần trước nên bỏ lệnh xóa.
-                # Đây là "va chạm thời gian", không phải ô kiểu ChatGPT: không chuyển sang nháp.
-                self._log("s2_race gap_ms=%.0f (không chuyển sang nháp)", pv["gap_ms"])
-                self._reset("s2_race")
-                return
-            self.preedit_mode = True
-            # purpose/hints là "dấu vân tay" của ô, để sau này nhận diện trước (Bước 3).
-            self._log("s2_ignored -> preedit purpose=%d hints=0x%x", int(self.purpose), self.hints)
-            self._reset("s2_ignored")
+        if self.awaiting_confirm is not None:
+            # Ô nhập chưa xác nhận lần sửa: surrounding text có thể còn cũ, chưa kết luận được.
+            pv["tries"] -= 1
+            if pv["tries"] <= 0:
+                self.pending_verify = None
             return
-        pv["tries"] -= 1
-        if pv["tries"] <= 0:
-            self.pending_verify = None
+        self.pending_verify = None
+        if not any(b.endswith(pv["ins"]) for b in befores):
+            # Chữ engine vừa chèn không còn trước con trỏ: trang đã tự thay nội dung
+            # (chọn gợi ý, định dạng lại…). Không phải lỗi của S2: chỉ bỏ từ hiện tại.
+            self._log("content_changed_after_edit (không chuyển sang nháp)")
+            self._reset("content_changed")
+            return
+        # Chữ engine chèn vẫn ở đó nhưng phần trước nó sai (thiếu, thừa hoặc lặp chữ:
+        # taoạo, gống…): lệnh xóa không được áp dụng đúng -> ô này không đáng tin với S2,
+        # dùng nháp cho tới khi focus sang ô khác. Không cần biết nguyên nhân.
+        kind = "ignored" if any(b.endswith(pv["broken"]) for b in befores) else "mismatch"
+        self.preedit_mode = True
+        # purpose/hints là "dấu vân tay" của ô, để sau này nhận diện trước (Bước 3).
+        self._log("s2_unreliable kind=%s gap_ms=%.0f -> preedit purpose=%d hints=0x%x | %s",
+                  kind, pv["gap_ms"], int(self.purpose), self.hints,
+                  self._diag(full, cursor, anchor))
+        self._reset("s2_unreliable")
 
     # ---- preedit (S1) ----
 
@@ -512,6 +519,7 @@ class TelexivaProtoEngine(IBus.Engine):
             if self.pending_verify:
                 self.pending_verify["expect"] += ch
                 self.pending_verify["broken"] += ch
+                self.pending_verify["ins"] += ch
             return False
 
         if self._replace(new):

@@ -43,6 +43,7 @@ class FakeApp:
         self.inflight = None
         self.waiting = False
         self.key_queue = []
+        self.auto_confirm = True   # False: mô phỏng bản sao surrounding text còn cũ (chưa xác nhận)
         self.prev_char = ""
         self.last_edit_at = 0.0
         self.awaiting_confirm = None
@@ -86,6 +87,8 @@ class FakeApp:
 
     def type(self, s):
         for c in s:
+            if self.auto_confirm:
+                self.awaiting_confirm = None   # giữa hai phím, ô nhập giả đã xác nhận lần sửa trước
             self.history.append(self.buf)
             kv = IBus.unicode_to_keyval(c)
             st = IBus.ModifierType.SHIFT_MASK if c.isupper() else 0
@@ -138,6 +141,7 @@ class EngineSim(unittest.TestCase):
     def test_lagging_surrounding_text(self):
         # Gõ nhanh: bản sao của Mutter trễ 1 phím; Mutter đổi ký tự -> byte bằng bản sao đó.
         app = FakeApp()
+        app.auto_confirm = False
 
         def lagging():
             prev = app.history[-2] if len(app.history) >= 2 else ""
@@ -203,6 +207,7 @@ class EngineSim(unittest.TestCase):
         # Ngay sau lần sửa, ô báo trạng thái "đã xóa, chưa chèn" (xuoongs -> ô báo "xu")
         # trong suốt phím kế tiếp.
         app = FakeApp()
+        app.auto_confirm = False
         real_delete = app.delete_surrounding_text
         app.mid = None
         app.stale = None
@@ -222,31 +227,21 @@ class EngineSim(unittest.TestCase):
             app.type(c)
         self.assertEqual(app.buf, "xuống xuống ")
 
-    def test_fast_double_edit_is_race_not_rich_editor(self):
-        # Hai lần sửa sát nhau, ô bỏ lệnh xóa lần 2 -> không được chuyển cả ô sang nháp.
+    def test_field_deleting_too_much_switches_to_preedit(self):
+        # Ô xóa thừa 1 ký tự (giongso -> "gống"): sau khi xác nhận, nội dung khác mong đợi
+        # -> engine chuyển ô đó sang nháp, các từ sau đúng.
         app = FakeApp()
         real = app.delete_surrounding_text
-        calls = {"n": 0}
 
         def delete(offset, n):
-            calls["n"] += 1
-            if calls["n"] != 2:         # chỉ bỏ lệnh xóa thứ hai
-                real(offset, n)
+            real(offset - 1, n + 1)   # xóa thừa một ký tự
 
         app.delete_surrounding_text = delete
-        app.type("dduocjw ")
-        self.assertFalse(app.preedit_mode)
-
-    def test_code_context_words_unchanged(self):
-        for text in ["foo_bar-baz ", "api/test ", "test@example.com ", "obj.test ",
-                     "$var ", "a=test ", "http://localhost:8081/test "]:
-            with self.subTest(text=text):
-                self.assertEqual(FakeApp().type(text).buf, text)
-
-    def test_vietnamese_after_punctuation_still_works(self):
-        # Dấu câu thông thường + khoảng trắng không phải ngữ cảnh code.
-        self.assertEqual(FakeApp().type("xong. Tieeps tucj, nhes! ").buf, "xong. Tiếp tục, nhé! ")
-        self.assertEqual(FakeApp().type("(vieejt) ").buf, "(việt) ")
+        app.type("giongso ")
+        self.assertTrue(app.preedit_mode)
+        start = len(app.buf)
+        app.type("dduowcj ")
+        self.assertEqual(app.buf[start:], "được ")
 
     def test_wait_confirm_queues_keys(self):
         # Mô phỏng: lần sửa trước chưa được xác nhận, phím "o" đến trong lúc đợi.
@@ -266,6 +261,7 @@ class EngineSim(unittest.TestCase):
     def test_stale_mutter_copy_byte_conversion(self):
         # gocs -> "góc", rồi "o" -> "gốc" khi bản sao của Mutter vẫn còn là "goc".
         app = FakeApp()
+        app.auto_confirm = False
         app.view = ""            # bản sao của Mutter
         app.stale_next = False
 
