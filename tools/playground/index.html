@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telexiva Playground</title>
+<!--
+  Telexiva Playground (FR-008)
+  Trang local để tái hiện lỗi bộ gõ và ghi lại chuỗi sự kiện của trình duyệt.
+  Không có kết nối mạng; log chỉ nằm trong bộ nhớ của tab, xóa khi tải lại trang.
+  Mở bằng: google-chrome tools/playground/index.html
+-->
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --border: #dddcd6; --accent: #2457c5; --warn: #b4441c; --ok: #2c7a3f;
+    --row: #f1f0ec; --mono: "DejaVu Sans Mono", "Noto Sans Mono", "JetBrains Mono", monospace;
+  }
+  code { font-family: var(--mono); font-size: 0.9em; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --panel: #1f1f1d; --text: #e9e8e3; --muted: #9b9a93;
+      --border: #34332f; --accent: #7aa2ff; --warn: #ff8a5c; --ok: #6fcf86; --row: #262623;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, "Noto Sans", sans-serif; }
+  header { padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
+           display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  header label { color: var(--muted); font-size: 13px; }
+  header select, header input { font: inherit; padding: 4px 8px; border: 1px solid var(--border);
+                                border-radius: 6px; background: var(--bg); color: var(--text); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; padding: 16px 20px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .cases { display: grid; gap: 12px; align-content: start; }
+  .case { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .case h2 { font-size: 14px; margin: 0 0 4px; display: flex; gap: 8px; align-items: baseline; }
+  .case h2 .tag { font: 12px var(--mono); color: var(--accent); }
+  .case p { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+  .case input, .case textarea, .case [contenteditable] {
+    width: 100%; font: 16px/1.4 system-ui, sans-serif; padding: 8px 10px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+  .case textarea { min-height: 70px; resize: vertical; }
+  .case [contenteditable] { min-height: 44px; }
+  .case :focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .state { margin-top: 6px; font: 12px var(--mono); color: var(--muted); word-break: break-all; }
+  .state .bad { color: var(--warn); font-weight: 600; }
+  .state .good { color: var(--ok); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+           border: 1px solid var(--border); background: var(--panel); color: var(--text); }
+  button:hover { border-color: var(--accent); }
+  .log { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+         display: flex; flex-direction: column; min-height: 400px; max-height: calc(100vh - 110px);
+         position: sticky; top: 16px; }
+  .log-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px;
+              border-bottom: 1px solid var(--border); }
+  .log-head strong { margin-right: auto; font-size: 14px; }
+  .log-head label { font-size: 13px; color: var(--muted); display: flex; gap: 4px; align-items: center; }
+  .log-body { overflow: auto; flex: 1; }
+  table { border-collapse: collapse; width: 100%; font: 12px/1.4 var(--mono); }
+  th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--row); white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 500; }
+  tr.ev-keydown td:nth-child(3) { color: var(--accent); }
+  tr.ev-composition td:nth-child(3) { color: var(--warn); font-weight: 600; }
+  tr.ev-beforeinput td:nth-child(3) { color: var(--ok); }
+  tr.sep td { border-bottom: 2px dashed var(--border); padding: 0; }
+  td.val { white-space: pre; }
+  .hint { padding: 8px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); }
+  datalist { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Telexiva Playground</h1>
+  <label>Bộ gõ đang test
+    <select id="engine">
+      <option>ibus-unikey</option>
+      <option>telexiva-prototype</option>
+      <option>telexiva</option>
+      <option>english (đối chứng)</option>
+      <option>khác</option>
+    </select>
+  </label>
+  <label>Ghi chú phiên <input id="note" placeholder="vd: Chrome Wayland, strategy S2" size="32"></label>
+</header>
+
+<main>
+  <section class="cases">
+
+    <div class="case" data-case="text">
+      <h2>Ô văn bản thường <span class="tag">BUG-004</span></h2>
+      <p>Gõ <code>vieejt</code> rồi <b>không</b> nhấn Space. Chữ đã nằm trong ô chưa, hay đang ở preedit (gạch chân, có <code>composition*</code> trong log)?</p>
+      <input type="text" autocomplete="off" spellcheck="false">
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="textarea">
+      <h2>Textarea</h2>
+      <p>Gõ một câu dài có dấu, thử Backspace giữa từ, click sang vị trí khác rồi gõ tiếp.</p>
+      <textarea spellcheck="false"></textarea>
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="currency">
+      <h2>Ô tiền tệ tự định dạng <span class="tag">BUG-001</span></h2>
+      <p>Gõ <code>1200000</code>. Ô tự chèn dấu phẩy khi nhập (giống nhiều trang thật). Mong đợi: <code>1,200,000</code>.</p>
+      <input type="text" inputmode="numeric" autocomplete="off" data-expect="1,200,000">
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="controlled">
+      <h2>Ô "controlled" kiểu React <span class="tag">BUG-001</span></h2>
+      <p>Mỗi lần <code>input</code>, trang gán lại <code>value</code> sau một microtask, như framework SPA. Gõ <code>1200000</code> và một từ có dấu.</p>
+      <input type="text" autocomplete="off" spellcheck="false">
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="number">
+      <h2>input type=number</h2>
+      <p>Gõ <code>1200000</code>.</p>
+      <input type="number" data-expect="1200000">
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="datalist">
+      <h2>Gợi ý &lt;datalist&gt; <span class="tag">BUG-002</span></h2>
+      <p>Gõ <code>Q</code>, chọn <i>Quên chấm công</i> bằng chuột, rồi thử lại bằng mũi tên + Enter. Mong đợi đúng <code>Quên chấm công</code>.</p>
+      <input type="text" list="dl-suggest" spellcheck="false" data-expect="Quên chấm công">
+      <datalist id="dl-suggest">
+        <option value="Quên chấm công">
+        <option value="Quản lý dự án">
+        <option value="Quy trình làm việc">
+      </datalist>
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="autofill">
+      <h2>Autocomplete lịch sử của Chrome <span class="tag">BUG-002</span></h2>
+      <p>Lần đầu: gõ <code>Quên chấm công</code> (chế độ English) rồi bấm <b>Lưu</b> để Chrome nhớ. Sau đó xóa ô, bật tiếng Việt, gõ <code>Q</code> và chọn gợi ý.</p>
+      <form class="row" action="about:blank" target="sink" method="get" autocomplete="on">
+        <input type="text" name="telexiva_playground_q" autocomplete="on" spellcheck="false" data-expect="Quên chấm công">
+        <button type="submit" style="flex:0">Lưu</button>
+      </form>
+      <iframe name="sink" title="sink" hidden></iframe>
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="search">
+      <h2>Ô tìm kiếm có inline completion <span class="tag">BUG-003</span></h2>
+      <p>Mô phỏng thanh địa chỉ: gõ <code>lo</code>, trang tự điền phần còn lại <code>calhost:8081</code> dạng bôi đen. Nhấn Enter ngay. Mong đợi: kết quả là <code>localhost:8081</code>. Bài test thật vẫn phải làm trên omnibox của Chrome.</p>
+      <input type="text" autocomplete="off" spellcheck="false" data-expect="localhost:8081">
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="password">
+      <h2>Ô mật khẩu <span class="tag">FR-011</span></h2>
+      <p>Gõ <code>aas</code>. Bộ gõ phải để nguyên, không biến đổi. Giá trị chỉ hiện độ dài và kiểm tra, không hiện nội dung.</p>
+      <input type="password" autocomplete="new-password" data-expect="aas">
+      <div class="state"></div>
+    </div>
+
+    <div class="case" data-case="editable">
+      <h2>contenteditable</h2>
+      <p>Giống editor web (Slack, Notion, Google Docs). Gõ một câu có dấu.</p>
+      <div contenteditable="true" spellcheck="false"></div>
+      <div class="state"></div>
+    </div>
+
+  </section>
+
+  <section class="log" aria-label="Event log">
+    <div class="log-head">
+      <strong>Event log</strong>
+      <label><input type="checkbox" id="f-keyup"> keyup</label>
+      <label><input type="checkbox" id="f-select"> selectionchange</label>
+      <button id="btn-sep" title="Chèn dòng phân cách giữa hai lần thử">Phân cách</button>
+      <button id="btn-copy-md">Copy Markdown</button>
+      <button id="btn-copy-json">Copy JSON</button>
+      <button id="btn-clear">Xóa</button>
+    </div>
+    <div class="log-body">
+      <table>
+        <thead><tr><th>t (ms)</th><th>ô</th><th>event</th><th>key / inputType</th><th>data</th><th>composing</th><th>value sau event</th><th>caret</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </div>
+    <div class="hint">Log chỉ nằm trong tab này, không gửi đi đâu. Ô mật khẩu không bao giờ ghi nội dung. "value sau event" được đọc ở microtask kế tiếp.</div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const logBody = document.getElementById("log");
+const entries = [];
+let t0 = null;
+
+function now() {
+  const t = performance.now();
+  if (t0 === null) t0 = t;
+  return Math.round((t - t0) * 10) / 10;
+}
+
+function isSecret(el) {
+  return el instanceof HTMLInputElement && el.type === "password";
+}
+
+function readValue(el) {
+  if (el.isContentEditable) return el.innerText.replace(/\n$/, "");
+  return el.value;
+}
+
+function readCaret(el) {
+  if (el.isContentEditable) {
+    const sel = window.getSelection();
+    return sel && sel.rangeCount ? `${sel.anchorOffset}` : "";
+  }
+  try {
+    if (el.selectionStart == null) return "";
+    return el.selectionStart === el.selectionEnd
+      ? `${el.selectionStart}`
+      : `${el.selectionStart}-${el.selectionEnd}`;
+  } catch { return ""; }
+}
+
+function show(el, text) {
+  if (text == null) return "";
+  return isSecret(el) ? `•×${text.length}` : text;
+}
+
+function visible(s) {
+  // Hiện khoảng trắng/ký tự điều khiển để thấy rõ ký tự dư.
+  return String(s).replace(/ /g, "␣").replace(/\n/g, "⏎").replace(/\t/g, "⇥");
+}
+
+function addRow(entry) {
+  entries.push(entry);
+  const tr = document.createElement("tr");
+  if (entry.type === "---") {
+    tr.className = "sep";
+    tr.innerHTML = '<td colspan="8"></td>';
+  } else {
+    tr.className = "ev-" + (entry.type.startsWith("composition") ? "composition" : entry.type);
+    const cells = [entry.t, entry.field, entry.type, entry.key, visible(entry.data ?? ""),
+                   entry.composing ? "yes" : "", visible(entry.value ?? ""), entry.caret ?? ""];
+    cells.forEach((c, i) => {
+      const td = document.createElement("td");
+      td.textContent = c;
+      if (i === 6) td.className = "val";
+      tr.appendChild(td);
+    });
+  }
+  logBody.appendChild(tr);
+  tr.scrollIntoView({ block: "nearest" });
+}
+
+function record(el, field, ev) {
+  const base = { t: now(), field, type: ev.type, key: "", data: null, composing: !!ev.isComposing };
+  if (ev.type.startsWith("key")) {
+    base.key = ev.key + (ev.repeat ? " (repeat)" : "");
+    if (ev.key === "Process" || ev.keyCode === 229) base.key += " [IME]";
+  } else if (ev.type === "beforeinput" || ev.type === "input") {
+    base.key = ev.inputType || "";
+    base.data = show(el, ev.data);
+  } else if (ev.type.startsWith("composition")) {
+    base.data = show(el, ev.data);
+    base.composing = ev.type !== "compositionend";
+  }
+  // Đọc value ở microtask kế tiếp để thấy kết quả sau khi trình duyệt áp dụng event.
+  queueMicrotask(() => {
+    base.value = show(el, readValue(el));
+    base.caret = readCaret(el);
+    addRow(base);
+    updateState(el);
+  });
+}
+
+function updateState(el) {
+  const box = el.closest(".case").querySelector(".state");
+  const v = readValue(el);
+  const parts = [];
+  if (isSecret(el)) {
+    parts.push(`độ dài ${v.length}`);
+  } else {
+    parts.push(`"${visible(v)}" (${[...v].length} ký tự)`);
+    if (v !== v.normalize("NFC")) parts.push('<span class="bad">không phải NFC</span>');
+  }
+  const expect = el.dataset.expect;
+  if (expect !== undefined && v.length) {
+    parts.push(v === expect
+      ? '<span class="good">✓ khớp mong đợi</span>'
+      : `<span class="bad">✗ mong đợi "${isSecret(el) ? "•×" + expect.length : visible(expect)}"</span>`);
+  }
+  box.innerHTML = parts.join(" · ");
+}
+
+const EVENTS = ["keydown", "keyup", "beforeinput", "input",
+                "compositionstart", "compositionupdate", "compositionend", "focus", "blur", "change"];
+
+document.querySelectorAll(".case").forEach(box => {
+  const field = box.dataset.case;
+  const el = box.querySelector("input:not([type=submit]), textarea, [contenteditable]");
+  for (const type of EVENTS) {
+    el.addEventListener(type, ev => {
+      if (type === "keyup" && !document.getElementById("f-keyup").checked) return;
+      record(el, field, ev);
+    });
+  }
+});
+
+document.addEventListener("selectionchange", () => {
+  if (!document.getElementById("f-select").checked) return;
+  const el = document.activeElement;
+  const box = el && el.closest && el.closest(".case");
+  if (!box) return;
+  addRow({ t: now(), field: box.dataset.case, type: "selectionchange", key: "", data: null,
+           composing: false, value: show(el, readValue(el)), caret: readCaret(el) });
+});
+
+/* ---- Hành vi mô phỏng của từng ô ---- */
+
+// Ô tiền tệ: định dạng lại ngay trong sự kiện input và đặt lại caret theo số chữ số bên trái.
+(() => {
+  const el = document.querySelector('[data-case="currency"] input');
+  el.addEventListener("input", () => {
+    const caret = el.selectionStart ?? el.value.length;
+    const digitsLeft = el.value.slice(0, caret).replace(/\D/g, "").length;
+    const digits = el.value.replace(/\D/g, "");
+    const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    if (formatted === el.value) return;
+    el.value = formatted;
+    let pos = 0, seen = 0;
+    while (pos < formatted.length && seen < digitsLeft) {
+      if (/\d/.test(formatted[pos])) seen++;
+      pos++;
+    }
+    el.setSelectionRange(pos, pos);
+  });
+})();
+
+// Ô controlled: lưu "state" rồi gán lại value bất đồng bộ, như React.
+(() => {
+  const el = document.querySelector('[data-case="controlled"] input');
+  let state = "";
+  el.addEventListener("input", () => {
+    state = el.value;
+    queueMicrotask(() => {
+      if (el.value !== state) return;
+      const caret = el.selectionStart;
+      el.value = state;
+      el.setSelectionRange(caret, caret);
+    });
+  });
+})();
+
+// Ô tìm kiếm: inline completion giống omnibox, Enter "điều hướng" tới giá trị đầy đủ.
+(() => {
+  const el = document.querySelector('[data-case="search"] input');
+  const candidates = ["localhost:8081", "localhost:3000", "github.com/phuocdon25"];
+  let lastInputType = "";
+  el.addEventListener("beforeinput", ev => { lastInputType = ev.inputType; });
+  el.addEventListener("input", ev => {
+    // Không tự điền khi đang xóa hoặc đang composition, giống Chrome.
+    if (ev.isComposing || lastInputType.startsWith("delete")) return;
+    const typed = el.value.slice(0, el.selectionStart);
+    if (!typed || el.selectionStart !== el.value.length) return;
+    const hit = candidates.find(c => c.startsWith(typed) && c !== typed);
+    if (!hit) return;
+    el.value = hit;
+    el.setSelectionRange(typed.length, hit.length);
+  });
+  el.addEventListener("keydown", ev => {
+    if (ev.key !== "Enter" || ev.isComposing) return;
+    ev.preventDefault();
+    const target = el.value;
+    queueMicrotask(() => addRow({ t: now(), field: "search", type: "navigate", key: "Enter",
+                                  data: null, composing: false, value: target, caret: "" }));
+  });
+})();
+
+/* ---- Toolbar ---- */
+
+function meta() {
+  return {
+    engine: document.getElementById("engine").value,
+    note: document.getElementById("note").value,
+    userAgent: navigator.userAgent,
+    time: new Date().toISOString(),
+  };
+}
+
+function toMarkdown() {
+  const m = meta();
+  const lines = [
+    `**Engine:** ${m.engine}  `,
+    `**Ghi chú:** ${m.note || "-"}  `,
+    `**UA:** ${m.userAgent}  `,
+    `**Thời điểm:** ${m.time}`,
+    "",
+    "| t (ms) | ô | event | key / inputType | data | composing | value | caret |",
+    "|---|---|---|---|---|---|---|---|",
+  ];
+  const esc = s => String(s ?? "").replace(/\|/g, "\\|");
+  for (const e of entries) {
+    if (e.type === "---") { lines.push("| — | | | | | | | |"); continue; }
+    lines.push(`| ${e.t} | ${e.field} | ${e.type} | ${esc(e.key)} | ${esc(visible(e.data ?? ""))} | ${e.composing ? "yes" : ""} | ${esc(visible(e.value ?? ""))} | ${e.caret ?? ""} |`);
+  }
+  return lines.join("\n");
+}
+
+async function copy(text, btn) {
+  const label = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "Đã copy";
+  } catch {
+    btn.textContent = "Copy lỗi";
+  }
+  setTimeout(() => { btn.textContent = label; }, 1200);
+}
+
+document.getElementById("btn-copy-md").addEventListener("click", e => copy(toMarkdown(), e.currentTarget));
+document.getElementById("btn-copy-json").addEventListener("click", e =>
+  copy(JSON.stringify({ ...meta(), events: entries }, null, 2), e.currentTarget));
+document.getElementById("btn-sep").addEventListener("click", () => addRow({ type: "---" }));
+document.getElementById("btn-clear").addEventListener("click", () => {
+  entries.length = 0; t0 = null; logBody.textContent = "";
+});
+
+// Ghi nhớ lựa chọn engine/ghi chú trong tab (tiện khi tải lại trang).
+for (const id of ["engine", "note"]) {
+  const el = document.getElementById(id);
+  try { const v = localStorage.getItem("telexiva-pg-" + id); if (v !== null) el.value = v; } catch {}
+  el.addEventListener("change", () => { try { localStorage.setItem("telexiva-pg-" + id, el.value); } catch {} });
+}
+</script>
+</body>
+</html>
