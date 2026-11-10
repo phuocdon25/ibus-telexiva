@@ -134,11 +134,16 @@ class TelexivaProtoEngine(IBus.Engine):
 
     def _strategy(self) -> str:
         s = self.cfg.get("strategy", "auto")
-        if s in ("s2", "s3"):
+        if s in ("s2", "s3", "s3k"):
             return s
         if self.purpose == IBus.InputPurpose.TERMINAL:
             return "s3"   # terminal tự khai báo (ví dụ VTE): không tin surrounding text
-        return "s2" if self._has_surrounding() else "s3"
+        if self._has_surrounding():
+            return "s2"
+        # Ghi chú thử nghiệm (Chrome XWayland, gtk3-im): s3 bị đảo thứ tự Backspace/commit
+        # (taoj -> "taạ"); s3k (gửi cả chữ bằng phím) thì Chrome bỏ qua keysym có dấu
+        # (taoj -> "to"). Cả hai không dùng được; s3k chỉ còn là tùy chọn thử nghiệm.
+        return "s3"
 
     # ---- guard ----
 
@@ -221,14 +226,20 @@ class TelexivaProtoEngine(IBus.Engine):
                 self.delete_surrounding_text(-n_del, n_del)
             else:
                 for _ in range(n_del):
-                    self.forward_key_event(IBus.KEY_BackSpace, KEYCODE_BACKSPACE, 0)
-                    self.forward_key_event(IBus.KEY_BackSpace, KEYCODE_BACKSPACE,
-                                           IBus.ModifierType.RELEASE_MASK)
+                    self._forward_key(IBus.KEY_BackSpace, KEYCODE_BACKSPACE)
         if ins:
-            self.commit_text(IBus.Text.new_from_string(ins))
+            if strategy == "s3k":
+                for c in ins:
+                    self._forward_key(IBus.unicode_to_keyval(c), 0)
+            else:
+                self.commit_text(IBus.Text.new_from_string(ins))
         self._set_shown(new)
         self._log("replace strategy=%s del=%d ins=%d", strategy, n_del, len(ins))
         return True
+
+    def _forward_key(self, keyval: int, keycode: int):
+        self.forward_key_event(keyval, keycode, 0)
+        self.forward_key_event(keyval, keycode, IBus.ModifierType.RELEASE_MASK)
 
     def _finish_word(self, why: str):
         """Kết thúc từ: khôi phục phím gốc nếu sai chính tả."""

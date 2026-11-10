@@ -37,3 +37,15 @@
 - [ ] Chạy playground với prototype (BUG-001/002/004) và thử omnibox thật (BUG-003).
 - [ ] Thử VS Code editor (Monaco), không chỉ ô chat.
 - [ ] Nghiên cứu cách sửa chữ trong terminal.
+
+## Bổ sung (chiều 2026-11-10): ô soạn thảo "nâng cao" và các cách xóa chữ
+
+| Thử nghiệm | Kết quả |
+|---|---|
+| S2 trong ô chat ChatGPT, Gemini (Chrome Wayland) | Lệnh xóa bị bỏ qua, chỉ chèn: `taoj` → `taoạo`. Ô nhập thường vẫn đúng. |
+| S3 (Backspace giả) trên Chrome/VS Code Wayland | Backspace không tới ứng dụng nào: `vaanx` → `vaâxn`. Loại bỏ. |
+| Chrome XWayland (`--ozone-platform=x11`), client `gtk3-im:google-chrome` | Không có surrounding text. Tên ứng dụng **có** (khác Wayland: `gnome-shell`). |
+| S3 trên Chrome XWayland | Backspace tới được nhưng đảo thứ tự với commit: `taoj` → `taạ`, `vaanx` → `vâẫ`. |
+| S3k (gửi cả chữ mới bằng phím) trên Chrome XWayland | Thứ tự đúng nhưng Chrome bỏ qua keysym có dấu: `taoj` → `to`. |
+
+Kết luận: trên GNOME Wayland, xóa chữ chỉ có S2; ô soạn thảo nâng cao (ProseMirror…) bỏ qua S2. Hướng tiếp theo: tự phát hiện ô bỏ qua lệnh xóa và chuyển sang preedit (S1) cho ô đó. Bộ quy tắc Telex đã qua 38.378 ca từ danh sách Viet74K (`prototype/wordlist_check.py`).
