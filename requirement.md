@@ -7,7 +7,7 @@
 |---|---|
 | Project | Telexiva |
 | Repository / gói | `ibus-telexiva` (theo quy ước đặt tên của hệ sinh thái IBus, như `ibus-unikey`) |
-| Version | 0.3.0 (Planning — sau review lần 2) |
+| Version | 0.4.0 (cuối Phase 0 — cập nhật theo kết quả prototype) |
 | Platform | Ubuntu 26.04 LTS |
 | Primary Desktop | GNOME / Wayland |
 | Programming Language | C++20 (core + engine); Python cho prototype Phase 0 |
@@ -16,7 +16,7 @@
 | Build System | CMake + Ninja |
 | Project Type | Open Source |
 | License | GPL-3.0-or-later (đã chốt 2026-11-10) |
-| Status | Planning |
+| Status | Phase 0 gần hoàn tất; prototype Python dùng hằng ngày |
 
 ### Lịch sử thay đổi
 
@@ -25,6 +25,7 @@
 | 0.1.0 | Bản đầu tiên. |
 | 0.2.0 | Thêm FR-009 Commit Strategy, FR-010 Per-app profile, FR-011 Password field; đặc tả Telex theo UniKey Windows; NFR có số đo; môi trường tái hiện lỗi; bỏ `telexivactl`; VNI dời khỏi MVP. |
 | 0.3.0 | **Chốt IBus engine** thay cho Fcitx5 (§6.0). Xác nhận nguyên nhân nghi ngờ của các lỗi là preedit. Đổi FR-009 thành nguyên tắc **"pass-through first"** kèm kiểm tra surrounding text. Thêm prototype Python vào Phase 0. Phụ lục A đổi thành quy trình chạy song song với `ibus-unikey`. |
+| 0.4.0 | Cập nhật theo kết quả prototype (xem `docs/findings/`): xác nhận BUG-001/002/004 do preedit và **BUG-003 đã sửa**; FR-009 viết lại (S3 không dùng được trên GNOME Wayland, S1 tự động cho ô bỏ qua lệnh xóa, guard chịu được báo trễ / trạng thái giữa chừng / va chạm thời gian); FR-001 thêm nhiều thứ tự gõ và quy tắc hủy dấu dùng từ điển tiếng Anh; thêm FR-013 ngữ cảnh code/URL/email; FR-010 hạ xuống P2 (không nhận diện được ứng dụng trên Wayland); terminal ra khỏi phạm vi; ADR 0001 tách thành file riêng. |
 
 ### Quy ước đặt tên
 
@@ -68,7 +69,7 @@ Các lỗi đã ghi nhận (chi tiết tái hiện ở §8.3):
 - Nhấn Enter khi Chrome gợi ý URL trên thanh địa chỉ lại tìm kiếm thay vì điều hướng.
 - Ở nhiều nơi (đặc biệt là terminal), từ đang gõ ở trạng thái "chưa hoàn thiện" và chỉ được đưa vào thật khi nhấn Space.
 
-**Phân tích nguyên nhân (giả thuyết mạnh, cần kiểm chứng ở Phase 0):**
+**Phân tích nguyên nhân (đã kiểm chứng ở Phase 0, xem `docs/findings/2026-11-10-ibus-unikey-baseline.md`):**
 
 `ibus-unikey` giữ từ đang gõ ở dạng **preedit** (vùng chữ tạm, chưa thuộc về ứng dụng) cho tới khi kết thúc từ. Người dùng đã xác nhận triệu chứng này. Điểm chung của ba lỗi Chrome là chuỗi gõ **không cần biến đổi tiếng Việt** (`1200000`, `Q`, `lo`), và ở chế độ English thì không lỗi. Do đó:
 
@@ -79,6 +80,8 @@ Các lỗi đã ghi nhận (chi tiết tái hiện ở §8.3):
 | BUG-003 | Chrome không hiện inline autocomplete khi đang có preedit; Enter làm commit `lo` rồi mới tới Enter, nên Chrome tìm kiếm `lo` |
 
 Nếu engine **cư xử y hệt English khi không cần biến đổi** (FR-009), cả ba lỗi có khả năng cao không còn xảy ra.
+
+**Kết quả Phase 0:** log playground tái hiện được BUG-001, BUG-002, BUG-004 với `ibus-unikey` và chỉ đúng cơ chế preedit. Với prototype "pass-through first", người dùng xác nhận **BUG-003 đã hết**: gõ `lo` + Enter điều hướng tới `localhost:8081`. BUG-001/002 còn chờ chạy playground với Telexiva.
 
 Danh sách lỗi có thể chưa đầy đủ. Mọi lỗi phát hiện thêm được ghi vào `docs/known-issues.md` theo mẫu ở §12.3.
 
@@ -128,6 +131,7 @@ Vì người dùng ưu tiên học sâu hơn dùng sớm, dự án **giữ đủ
 - **Gõ tắt / macro** kiểu UniKey (dời sang sau MVP, xem FR-012).
 - Bảng mã khác Unicode (TCVN3, VNI-Windows…). Telexiva chỉ xuất Unicode dựng sẵn (NFC).
 - CLI riêng. Dùng công cụ sẵn có (`ibus engine`, `gsettings`, D-Bus).
+- **Gõ tiếng Việt trong terminal** (Ptyxis/GNOME Terminal, terminal tích hợp VS Code). Người dùng chính không cần, và trên GNOME Wayland không có cách sửa chữ không preedit nào hoạt động trong terminal (§FR-009). Khi làm việc trong terminal, người dùng chuyển sang bàn phím English bằng `Super+Space`.
 
 ## 3. Đối tượng sử dụng
 
@@ -169,6 +173,11 @@ Dấu `w` áp dụng cho cả cụm nguyên âm khi hợp lệ: `uo` + `w` → `
 | `z` | Xóa dấu thanh (giữ dấu mũ/móc) | `áz` → `a`, `ấz` → `â` |
 
 - **Gõ dấu tự do (bật mặc định):** phím dấu có thể đặt ở bất kỳ vị trí nào sau nguyên âm trong từ. `tieengs` và `tieesng` đều ra `tiếng`. `nguoiwf` và `nguwowif` đều ra `người`.
+- **Nhiều thứ tự gõ (bổ sung 0.4.0):** mỗi người gõ một kiểu, engine phải chấp nhận:
+  - dấu mũ/móc gõ sau cùng: `tiengse`, `vietje` → `tiếng`, `việt`;
+  - `d` gõ ở bất kỳ đâu trong từ biến `d` đầu từ thành `đ`: `dudocwj`, `duowcjd` → `được` (vì `d` không bao giờ là phụ âm cuối);
+  - cặp `ươ` đúng bất kể vị trí `w`: `uow`, `uwow`, `uwo`, `uo…w`; đứng cuối từ thì là `uơ` (`thuở`);
+  - khi một phím có hai cách hiểu, chọn cách cho ra vần hợp lệ: `chuaw` → `chưa` (không phải `chuă`), `quaw` → `quă`, `huana` → `huân`, `khoeof` → `khoèo`; chữ `u` của `qu` không tham gia `ươ` (`quowr` → `quở`).
 - **Đổi dấu:** gõ phím dấu khác thì thay dấu cũ. `asf` → `à`.
 
 #### c) Hủy biến đổi bằng cách gõ lặp phím
@@ -182,7 +191,9 @@ Dấu `w` áp dụng cho cả cụm nguyên âm khi hợp lệ: `uo` + `w` → `
 | `ddd` | `dd` |
 | `[[` | `[` |
 
-Sau khi đã hủy, phím đó không còn kích hoạt biến đổi nữa trong từ hiện tại (giống UniKey).
+Sau khi đã hủy, phím đó không còn kích hoạt biến đổi nữa trong từ hiện tại (giống UniKey). Gõ lặp để hủy rồi gõ tiếp vẫn giữ kết quả hủy: `tassk` → `task` (thói quen UniKey).
+
+**Ngoại lệ (0.4.0):** nếu nguyên chuỗi phím là một **từ tiếng Anh có trong từ điển local** (`/usr/share/dict/words`, gói `wamerican`) và kết quả không phải âm tiết tiếng Việt, giữ nguyên chuỗi phím: `error`, `effect`, `address` (chữ cái đôi thật, không phải để hủy dấu). Máy không có từ điển thì hành vi như UniKey (`error` → `eror`).
 
 #### d) Vị trí đặt dấu thanh
 
@@ -208,7 +219,8 @@ Tương đương tùy chọn "Bật kiểm tra chính tả" + "Tự động khô
 | `vieetj` | `việt` | Hợp lệ |
 | `vietj` | `vietj` | Thiếu `e` thứ hai: `viẹt` sai chính tả, khôi phục |
 
-- Danh sách ngoại lệ: các từ tiếng Anh *trùng với âm tiết tiếng Việt hợp lệ* (`as`, `is`, `of`, `if`…) **không** tự khôi phục. Đây là hạn chế đã biết, giống UniKey; người dùng gõ lặp phím (`ass`) hoặc chuyển sang English. Xem xét whitelist từ tiếng Anh ở P2.
+- Danh sách ngoại lệ: các từ tiếng Anh *trùng với âm tiết tiếng Việt hợp lệ* (`as`, `is`, `test` → `tét`, `var` → `vả`, `ref` → `rè`) **không** tự khôi phục. Đây là hạn chế đã biết, giống UniKey; người dùng gõ lặp phím (`tesst`) hoặc chuyển sang English. FR-013 giảm bớt trường hợp này trong code/URL/email. Xem xét whitelist từ tiếng Anh ở P2.
+- **Đã kiểm chứng (prototype):** 38.378 chuỗi phím sinh từ 7.644 âm tiết chuẩn trong danh sách Viet74K (5 kiểu thứ tự gõ, có chữ hoa) cho kết quả đúng 100% (`prototype/wordlist_check.py`); 161/162 ca trong `vietnamese-telex-test-cases.md` (`prototype/run_user_cases.py`).
 
 #### f) Chữ hoa
 
@@ -236,7 +248,8 @@ Có hai tầng chuyển đổi, cần phân biệt rõ:
 - **Bên trong Telexiva, giữa Vietnamese và English** (giống UniKey): engine tự xử lý.
   - Mặc định **`Ctrl+Shift`** (nhấn rồi thả, không kèm phím khác). Tùy chọn khác: `Alt+Z`.
   - Chỉ kích hoạt khi `Ctrl+Shift` được nhấn và thả **mà không có phím nào khác xen giữa**, để không xung đột với các tổ hợp `Ctrl+Shift+<phím>` của VS Code.
-  - Hiển thị trạng thái V/E trên indicator input source ở top bar của GNOME (qua IBus property). Cần kiểm chứng cơ chế hiển thị ở Phase 0.
+  - Hiển thị trạng thái V/E trên indicator input source ở top bar của GNOME (qua IBus property). Cần kiểm chứng cơ chế hiển thị.
+  - Trạng thái 0.4.0: **chưa có trong prototype**; hiện chuyển bằng `Super+Space` giữa Telexiva và bàn phím English. Làm ở Phase 2.
 
 ### FR-005: Composition — P0
 
@@ -256,7 +269,7 @@ App `telexiva-settings` (IBus không tự sinh giao diện cấu hình). Cho ph�
 
 ### FR-008: Playground — P0
 
-Trang HTML local (chạy trong Chrome) mô phỏng các tình huống lỗi: text input, textarea, ô tiền tệ có định dạng lại số (`1,200,000`), `<datalist>` / autocomplete tự viết, ô `type=password`, `contenteditable`. Mỗi ô ghi lại chuỗi sự kiện `keydown` / `beforeinput` / `input` / `compositionstart|update|end` để so sánh giữa các bộ gõ. Playground không thay thế kiểm thử trên trang thật. Ưu tiên P0 vì là công cụ đo của Phase 0.
+Trang HTML local (chạy trong Chrome) mô phỏng các tình huống lỗi: text input, textarea, ô tiền tệ có định dạng lại số (`1,200,000`), `<datalist>` / autocomplete tự viết, ô `type=password`, `contenteditable`. Mỗi ô ghi lại chuỗi sự kiện `keydown` / `beforeinput` / `input` / `compositionstart|update|end` để so sánh giữa các bộ gõ. Playground không thay thế kiểm thử trên trang thật. Ưu tiên P0 vì là công cụ đo của Phase 0. **Đã có:** `tools/playground/index.html`.
 
 ### FR-009: Commit Strategy — "pass-through first" — P0
 
@@ -271,22 +284,29 @@ Trang HTML local (chạy trong Chrome) mô phỏng các tình huống lỗi: tex
 
 #### Các strategy
 
-| Strategy | Cách sửa chữ khi cần biến đổi | Dùng cho | Rủi ro đã biết |
-|---|---|---|---|
-| **S2 — Surrounding text** (mặc định) | `delete_surrounding_text` rồi `commit_text` | Ứng dụng có hỗ trợ surrounding text (Chrome, GTK, Qt — cần kiểm chứng) | Một số ứng dụng hỗ trợ chưa đúng |
-| **S3 — Giả lập Backspace** | `forward_key_event(BackSpace)` × N rồi `commit_text` | Terminal (không có surrounding text) và ứng dụng không hỗ trợ S2 | Thứ tự giữa phím forward và commit trên Wayland cần kiểm chứng; không có guard |
-| **S1 — Preedit** (dự phòng) | Từ đang soạn ở dạng preedit, commit khi kết thúc từ | Ứng dụng mà S2 và S3 đều lỗi | Chính là cơ chế gây BUG-002, BUG-003 |
+| Strategy | Cách sửa chữ khi cần biến đổi | Kết quả kiểm chứng trên GNOME Wayland (Phase 0) |
+|---|---|---|
+| **S2 — Surrounding text** (mặc định) | `delete_surrounding_text` rồi `commit_text` | ✅ Ô nhập thường của Chrome, VS Code (editor, ô chat), GTK. ❌ Ô soạn thảo nâng cao (ô chat ChatGPT, Gemini) **bỏ qua lệnh xóa**, chỉ chèn: `taoj` → `taoạo`. |
+| **S1 — Preedit** (tự động) | Từ đang soạn ở dạng nháp có gạch chân, commit khi kết thúc từ (giống `ibus-unikey`) | ✅ Chạy ở mọi nơi; đổi lại có các rủi ro BUG-002/003 trong ô dùng nó. |
+| ~~S3 — Giả lập Backspace~~ | `forward_key_event(BackSpace)` | ❌ Trên Wayland, phím forward **không tới được ứng dụng nào** (Chrome, VS Code, terminal). Trên Chrome XWayland: tới được nhưng đảo thứ tự với commit (`taoj` → `taạ`). Gửi cả chữ bằng phím (S3k): Chrome bỏ qua keysym có dấu (`taoj` → `to`). **Loại bỏ.** |
 
 #### Yêu cầu
 
-- MVP hỗ trợ **S2 và S3**; S1 là P1.
-- Engine phát hiện ứng dụng không có surrounding text (qua capability của client) và tự chọn S3 hoặc S1 theo app profile.
-- Terminal (GNOME Terminal, Ptyxis, terminal tích hợp VS Code) mặc định dùng **S3**, vì terminal không cung cấp surrounding text.
+- **S2 là mặc định**; tự chuyển sang **S1 cho ô hiện tại** khi phát hiện ô bỏ qua lệnh xóa: ở phím kế tiếp sau một lần sửa, chữ trước con trỏ có dạng "chữ cũ + phần chèn" thay vì chữ mới. Giữ S1 cho tới khi focus sang ô khác. Từ đầu tiên trong ô như vậy vẫn sai (đã biết).
+- Ô không có surrounding text: không có cách sửa chữ không preedit. Với terminal: ngoài phạm vi (§2.3).
+- **Guard phải chịu được** các sai lệch của surrounding text đã quan sát:
+  - báo trễ 1–2 phím khi gõ nhanh (`macwj` → `măcj`);
+  - trạng thái giữa chừng "đã xóa, chưa chèn" ngay sau một lần sửa (`xuoongs` → `xuôngs`), chấp nhận trong 0,5 giây;
+  - vùng chọn **sau** con trỏ (inline autocomplete của omnibox);
+  - cursor và anchor lệch nhau dù không có vùng chọn (VS Code; nguyên nhân chưa rõ).
+  - Khi không chắc: cho phần còn lại của từ đi thẳng, không bao giờ xóa đoán.
+- **Va chạm thời gian:** ô nhập cần khoảng 4–13 ms (trung vị 8,5 ms) để xác nhận một lần sửa. Hai lần sửa sát nhau hơn mức này có thể làm mất lệnh xóa thứ hai (`dduocjw` → `đuọcược`). Lỗi này không được kết luận là "ô bỏ qua lệnh xóa". Phase 2: đợi xác nhận (tối đa ~20 ms) trước lần sửa kế tiếp.
+- Bước 3 (sau MVP): nhận diện trước ô cần S1 qua "dấu vân tay" `purpose`/`hints` (đang thu thập trong log), để không sai từ đầu tiên.
 - Mỗi strategy có regression test riêng cho các lỗi ở §8.3.
 
-### FR-010: Cấu hình theo ứng dụng (per-app profile) — P1
+### FR-010: Cấu hình theo ứng dụng (per-app profile) — P2
 
-Xác định ứng dụng theo thông tin client mà IBus cung cấp (cần kiểm chứng trên Wayland ở Phase 0). Mỗi profile cho phép đặt:
+**Kết quả Phase 0:** trên GNOME Wayland, tên client mà IBus báo luôn là `gnome-shell` (hoặc `fake`), nên engine **không biết đang gõ trong ứng dụng nào**. Chỉ ứng dụng nối thẳng qua IM module (ví dụ Chrome XWayland: `gtk3-im:google-chrome`) mới có tên. Vì vậy FR-010 hạ xuống P2; cách nhận diện khả thi: capability, `purpose`/`hints`, hoặc một extension GNOME Shell báo cửa sổ đang focus. Mỗi profile cho phép đặt:
 
 - Commit strategy (FR-009).
 - Chế độ mặc định (Vietnamese/English) khi focus vào ứng dụng.
@@ -301,6 +321,15 @@ Khi input context có purpose là password hoặc PIN, tự động pass-through
 ### FR-012: Gõ tắt (macro) — P2
 
 Tương đương tính năng gõ tắt của UniKey. Ngoài phạm vi MVP.
+
+### FR-013: Ngữ cảnh code, URL, email — P0 (bổ sung 0.4.0)
+
+Giảm việc biến đổi nhầm khi developer gõ code mà quên chuyển sang English:
+
+- Từ đứng **ngay sau** một trong các ký tự `_ . / @ : \ $ # = ~ < >` (không có khoảng trắng xen giữa) được giữ nguyên: `foo_bar`, `api/test`, `obj.test`, `$var`, `a=test`, `http://localhost:8081/test`.
+- Gõ `@` ngay sau một từ: khôi phục từ đó về chuỗi phím gốc, vì phần trước `@` của email không có dấu: `test@example.com`.
+- Dấu câu thông thường có khoảng trắng phía sau (`. , ! ?`) **không** phải ngữ cảnh code. Dấu nháy kép cũng không, vì hay đứng trước chữ tiếng Việt; vì vậy `"test"` vẫn thành `"tét"` (đã biết).
+- Ký tự trước từ lấy từ phím gõ gần nhất; nếu không biết (sau khi click chuột) thì đọc từ surrounding text.
 
 ## 5. Yêu cầu phi chức năng
 
@@ -323,24 +352,25 @@ Không có tác vụ chặn (I/O file, D-Bus đồng bộ) trong luồng xử l�
 
 ### NFR-003: Tương thích
 
-Ma trận kiểm thử bắt buộc (ưu tiên từ trên xuống):
+Ma trận kiểm thử bắt buộc (ưu tiên từ trên xuống). Cột kết quả là từ prototype Phase 0:
 
-| Ứng dụng | Chế độ hiển thị | Strategy dự kiến | Ưu tiên |
-|---|---|---|---|
-| Google Chrome | Native Wayland | S2 | P0 |
-| VS Code — editor | Mặc định | S2 | P0 |
-| VS Code — terminal tích hợp | Mặc định | S3 (cần kiểm chứng) | P0 |
-| Terminal (Ptyxis/GNOME Terminal) | Wayland | S3 | P1 |
-| Ứng dụng GTK4 (GNOME Text Editor) | Wayland | S2 | P1 |
-| Google Chrome | XWayland (`--ozone-platform=x11`) | S2 | P2 |
-| Ứng dụng Qt6 | Wayland | S2 | P2 |
-| Firefox | Wayland | S2 | P2 |
+| Ứng dụng | Chế độ hiển thị | Strategy | Ưu tiên | Kết quả Phase 0 |
+|---|---|---|---|---|
+| Google Chrome — ô nhập thường, thanh địa chỉ | Native Wayland | S2 | P0 | ✅ BUG-003 đã sửa |
+| Google Chrome — ô soạn thảo nâng cao (ChatGPT, Gemini) | Native Wayland | S2 → S1 tự động | P0 | ⚠️ từ đầu tiên sai, sau đó đúng |
+| VS Code — ô chat | Mặc định | S2 | P0 | ✅ dùng hằng ngày |
+| VS Code — editor | Mặc định | S2 | P0 | ⏳ chưa thử |
+| Ứng dụng GTK4 (GNOME Text Editor) | Wayland | S2 | P1 | ⏳ |
+| Ứng dụng Qt6 | Wayland | S2 | P2 | ⏳ |
+| Firefox | Wayland | S2 | P2 | ⏳ |
+| Google Chrome | XWayland | — | — | Không hỗ trợ surrounding text; không dùng |
+| Terminal (Ptyxis, VS Code terminal) | — | — | Ngoài phạm vi | §2.3 |
 
-Lưu ý: editor và terminal tích hợp của VS Code chạy trong cùng một tiến trình. Cần kiểm chứng engine có phân biệt được hai nơi này không (ví dụ qua surrounding text capability). Kết quả ghi trong `docs/compatibility.md`.
+Kết quả ghi trong `docs/compatibility.md`.
 
 ### NFR-004: Bảo mật và riêng tư
 
-Không lưu nội dung người dùng nhập; không gửi phím ra mạng; log không bao giờ chứa ký tự người dùng gõ hay surrounding text (chỉ log loại sự kiện, độ dài, mã lỗi); không yêu cầu root khi chạy hằng ngày; ô mật khẩu không đi qua core (FR-011).
+Không lưu nội dung người dùng nhập; không gửi phím ra mạng; log không bao giờ chứa ký tự người dùng gõ hay surrounding text (chỉ log loại sự kiện, độ dài, mã lỗi); không yêu cầu root khi chạy hằng ngày; ô mật khẩu không đi qua core (FR-011). Chế độ debug ghi nội dung (`debug_text`) chỉ bật khi người dùng chủ động đồng ý, và chỉ ghi một cửa sổ nhỏ quanh con trỏ khi có lỗi. Log thô của playground không đưa lên repository.
 
 ### NFR-005: Bảo trì
 
@@ -350,7 +380,7 @@ Core không phụ thuộc IBus; độ phủ test của core ≥ 90% dòng; có c
 
 ### 6.0. Quyết định framework: IBus
 
-Ghi lại trong `docs/adr/0001-framework.md`.
+Ghi lại đầy đủ trong [`docs/adr/0001-framework.md`](docs/adr/0001-framework.md).
 
 **Bối cảnh.** Trên GNOME/Wayland, Mutter chỉ chuyển input từ giao thức `text-input-v3` sang IBus. Fcitx5 chỉ nhận được phím qua IM module của GTK/Qt mà ứng dụng tự nạp, và cần extension Kimpanel (không có trong kho Ubuntu 26.04) để hiện trạng thái. Nhận định "Fcitx5 hỗ trợ Wayland tốt hơn" đúng với KDE, Sway, Hyprland, nhưng không đúng với GNOME. Nhiều nguồn tham khảo cũng kết luận IBus phù hợp hơn với GNOME Wayland.
 
@@ -363,7 +393,8 @@ Ghi lại trong `docs/adr/0001-framework.md`.
 | Tích hợp GNOME | Native: hiện trong Settings → Keyboard → Input Sources, chuyển bằng `Super+Space` |
 | Chrome native Wayland | Hoạt động qua đường Mutter → IBus đang dùng |
 | Cài đặt song song | Chỉ thêm một engine vào IBus; chạy song song với `ibus-unikey`, rủi ro rất thấp |
-| Surrounding text | IBus có API; khả năng hỗ trợ thực tế của từng ứng dụng cần kiểm chứng |
+| Surrounding text | Chrome và VS Code (qua Mutter) có hỗ trợ; ô soạn thảo nâng cao bỏ qua lệnh xóa (FR-009) |
+| Nhận diện ứng dụng | Không có trên Wayland: client luôn là `gnome-shell` (FR-010) |
 | API | C/GObject; viết wrapper RAII mỏng bằng C++20, giữ core sạch |
 | Settings UI | Phải tự viết (FR-007) |
 | Desktop khác | Frontend Fcitx5 là hướng mở rộng sau MVP; core đã độc lập |
@@ -498,10 +529,11 @@ Mỗi lỗi phải được kiểm tra với: `ibus-unikey` (đối chứng hi�
 4. Nhấn **Enter trực tiếp**.
 5. Mong đợi: điều hướng tới `localhost:8081`, giống chế độ English.
 6. Biến thể: gõ một từ có dấu trên omnibox khi đang có inline suggestion.
+7. **Trạng thái:** ✅ đã sửa với prototype (người dùng xác nhận, 2026-11-10).
 
 **BUG-004 — Từ chưa hoàn thiện cho tới khi nhấn Space**
 
-1. Trong terminal và trong ô nhập của Chrome, gõ `vieejt` nhưng không nhấn Space.
+1. Trong ô nhập của Chrome và VS Code, gõ `vieejt` nhưng không nhấn Space. (Terminal: ngoài phạm vi.)
 2. Mong đợi: `việt` đã nằm trong ứng dụng (không gạch chân). Chuyển focus, click chỗ khác hoặc nhấn phím điều hướng không làm mất hay nhân đôi chữ.
 
 **Bổ sung khi phát hiện:** lỗi trong VS Code (editor, Quick Open `Ctrl+P`, Command Palette, terminal tích hợp) được thêm vào đây theo cùng mẫu.
@@ -512,32 +544,36 @@ So sánh hành vi giữa `ibus-unikey`, Telexiva ở từng strategy và English
 
 ## 9. Lộ trình phát triển
 
-### Phase 0 — Research, playground & prototype
+### Phase 0 — Research, playground & prototype (gần hoàn tất)
 
-1. Thiết lập compiler/CMake/debugger, khởi tạo Git và README.
-2. Viết playground HTML (FR-008).
-3. Tái hiện bốn lỗi với `ibus-unikey`, ghi lại log sự kiện.
-4. **Prototype IBus engine bằng Python** (`python3-ibus` / GObject Introspection, đã có sẵn trên máy): Telex tối giản (`aa`, `dd`, `w`, dấu thanh) + pass-through first + S2 + guard + S3.
-5. Chạy prototype song song với `ibus-unikey` (Phụ lục A); kiểm chứng:
-   - Chrome native Wayland có cung cấp surrounding text và nhận `delete_surrounding_text` không.
-   - Ba lỗi Chrome và BUG-004 có hết với pass-through first không.
-   - `forward_key_event(BackSpace)` hoạt động và đúng thứ tự trong terminal trên Wayland không.
-   - Engine lấy được thông tin ứng dụng (cho FR-010) và hiện được trạng thái V/E trên top bar không.
-6. Tìm vòng lặp phát triển không cần `sudo` (chạy engine từ thư mục build).
+| Việc | Trạng thái |
+|---|---|
+| Git, README, LICENSE, GitHub (`phuocdon25/ibus-telexiva`) | ✅ |
+| Playground HTML (FR-008) | ✅ |
+| Baseline `ibus-unikey` | ✅ tái hiện BUG-001/002/004 |
+| Prototype IBus engine Python (pass-through first, S2, S1 tự động, guard) | ✅ dùng hằng ngày |
+| Kiểm chứng S2/S3/XWayland, nhận diện ứng dụng | ✅ (FR-009, FR-010) |
+| Kiểm thử hàng loạt Telex | ✅ 38.378 ca Viet74K; 161/162 ca file người dùng |
+| BUG-003 trên omnibox thật | ✅ đã sửa |
+| ADR 0001 | ✅ `docs/adr/0001-framework.md` |
+| Playground với Telexiva (BUG-001/002/004) | ⏳ cần người dùng gõ |
+| VS Code editor | ⏳ cần người dùng gõ |
+| Môi trường C++ (CMake, Ninja, `libibus-1.0-dev`, Catch2) | ⏳ cần cài gói (sudo) |
+| Vòng lặp phát triển | ✅ engine chạy thẳng từ repo; sửa code chỉ cần `ibus restart` (cài component XML một lần bằng sudo) |
 
-**Deliverable:** repository build được; playground; prototype; báo cáo kiểm chứng; ADR 0001 cập nhật kết quả. **Cổng quyết định:** nếu S2 không hoạt động trong Chrome, xem lại FR-009 trước khi sang Phase 1.
+**Deliverable:** playground; prototype; báo cáo kiểm chứng trong `docs/findings/`; ADR 0001. **Cổng quyết định:** S2 hoạt động trong Chrome ✅, nên giữ FR-009 và sang Phase 1.
 
 ### Phase 1 — Telexiva Core
 
-Engine API (`EditAction`), state machine, mô hình âm tiết, Telex đầy đủ theo FR-001, kiểm tra chính tả và tự khôi phục, backspace/reset, unit test dạng bảng, fuzz, benchmark. **Deliverable:** core độc lập IBus, test xanh, đạt NFR-001 cho core.
+Engine API (`EditAction`), state machine, mô hình âm tiết, Telex đầy đủ theo FR-001 (dùng bảng test của prototype làm chuẩn; cân nhắc `ukengine` của Unikey làm oracle so sánh tự động), kiểm tra chính tả và tự khôi phục, backspace/reset, unit test dạng bảng, fuzz, benchmark. **Deliverable:** core độc lập IBus, test xanh, đạt NFR-001 cho core.
 
 ### Phase 2 — IBus Engine (C++)
 
-Wrapper GObject, đăng ký engine, nhận key event, strategy S2 + S3 + guard, input context, ô mật khẩu, chuyển chế độ V/E, indicator. **Deliverable:** thay prototype bằng engine C++; gõ tiếng Việt được hằng ngày trong ứng dụng GTK.
+Wrapper GObject, đăng ký engine, nhận key event, strategy S2 + S1 tự động + guard (chịu được các sai lệch ở FR-009) + đợi xác nhận giữa hai lần sửa, ngữ cảnh code (FR-013), input context, ô mật khẩu, chuyển chế độ V/E, indicator. **Deliverable:** thay prototype bằng engine C++; gõ tiếng Việt được hằng ngày trong ứng dụng GTK.
 
 ### Phase 3 — Chrome, VS Code & Regression
 
-Kiểm thử theo ma trận NFR-003; chạy các lỗi §8.3 với từng strategy; app profile (FR-010); S1 nếu cần. **Deliverable:** compatibility matrix và báo cáo regression.
+Kiểm thử theo ma trận NFR-003; chạy các lỗi §8.3 với từng strategy; nhận diện trước ô cần S1 ("dấu vân tay" `purpose`/`hints`). **Deliverable:** compatibility matrix và báo cáo regression.
 
 ### Phase 4 — Settings
 
@@ -545,16 +581,17 @@ Theo FR-007. **Deliverable:** cấu hình được mọi tùy chọn qua giao di
 
 ### Phase 5 — Packaging & Release
 
-Debian package (engine, component XML, GSettings schema, settings app), hướng dẫn cài/gỡ/rollback, kiểm thử nâng cấp, tài liệu và release notes. **Deliverable:** `.deb` thử nghiệm và GitHub release.
+Debian package (engine, component XML, GSettings schema, settings app; phụ thuộc `wamerican` cho từ điển tiếng Anh), hướng dẫn cài/gỡ/rollback, kiểm thử nâng cấp, tài liệu và release notes. **Deliverable:** `.deb` thử nghiệm và GitHub release.
 
 ## 10. Tiêu chí hoàn thành MVP
 
 - [ ] Core qua toàn bộ bảng test của FR-001 (kể cả tự khôi phục từ tiếng Anh).
 - [ ] Fuzz test và benchmark đạt NFR-001, NFR-002.
 - [ ] IBus engine C++ chạy trên GNOME Wayland, song song với engine khác.
-- [ ] Gõ được tiếng Việt trong Chrome (Wayland), VS Code editor và terminal.
+- [ ] Gõ được tiếng Việt trong Chrome (Wayland) và VS Code (editor, ô chat).
 - [ ] Pass-through first: không có preedit mặc định; phím không biến đổi đi thẳng tới ứng dụng.
-- [ ] Strategy S2 (kèm guard) và S3; tự chọn theo capability của client.
+- [ ] Strategy S2 (kèm guard) và tự chuyển S1 cho ô bỏ qua lệnh xóa.
+- [ ] Ngữ cảnh code/URL/email (FR-013).
 - [ ] Chuyển Vietnamese / English bằng phím tắt cấu hình được, có indicator.
 - [ ] Ô mật khẩu tự pass-through.
 - [ ] Xử lý backspace, reset, focus change, context destroy.
@@ -566,17 +603,18 @@ Sửa được tất cả các lỗi là mục tiêu, nhưng **không phải đi
 
 ## 11. Rủi ro kỹ thuật
 
-| Rủi ro | Hướng xử lý |
+| Rủi ro | Trạng thái / hướng xử lý |
 |---|---|
-| Chrome native Wayland không cung cấp surrounding text qua Mutter → IBus | Kiểm chứng bằng prototype ở Phase 0; dự phòng S3 hoặc S1 cho Chrome |
-| `forward_key_event` trên Wayland sai thứ tự với `commit_text` | Kiểm chứng ở Phase 0; nếu sai, terminal dùng S1 |
-| Không phân biệt được editor và terminal tích hợp trong VS Code | Dựa vào capability surrounding text; nếu không được, chọn strategy an toàn chung cho VS Code |
-| Không lấy được tên ứng dụng trên Wayland (FR-010) | Kiểm chứng ở Phase 0; dự phòng chọn strategy chỉ dựa trên capability |
-| Chrome xử lý composition khác GTK/Qt | Playground + regression test theo strategy |
-| Quy tắc tiếng Việt nhiều trường hợp biên | Bảng test dữ liệu từ sớm, đối chiếu UniKey |
-| Từ tiếng Anh trùng âm tiết tiếng Việt không được khôi phục | Chấp nhận như UniKey; whitelist ở P2 |
+| Chrome native Wayland không cung cấp surrounding text | ✅ Đã kiểm chứng: có (ô thường) |
+| Ô soạn thảo nâng cao bỏ qua `delete_surrounding_text` | Xảy ra (ChatGPT, Gemini). Tự chuyển S1; nhận diện trước ở Phase 3 |
+| `forward_key_event` trên Wayland | Xảy ra: không tới ứng dụng. S3 loại bỏ |
+| Không lấy được tên ứng dụng trên Wayland | Xảy ra. FR-010 hạ P2 |
+| Surrounding text báo trễ / giữa chừng / lệch vị trí | Xảy ra. Guard chịu được (FR-009); đợi xác nhận ở Phase 2 |
+| Va chạm thời gian khi hai lần sửa sát nhau (< ~13 ms) | Hiếm; đợi xác nhận ở Phase 2 |
+| Quy tắc tiếng Việt nhiều trường hợp biên | Bảng test dữ liệu + Viet74K; cân nhắc `ukengine` làm oracle |
+| Từ tiếng Anh trùng âm tiết tiếng Việt | Chấp nhận như UniKey; FR-013 giảm trong code; whitelist P2 |
 | API IBus / hành vi Mutter thay đổi giữa các bản GNOME | Ghim theo Ubuntu 26.04; ghi phiên bản trong compatibility matrix |
-| Khó debug sự kiện phím | Playground và logging không chứa dữ liệu nhạy cảm |
+| Khó debug sự kiện phím | Playground; log chỉ ghi số liệu; debug nội dung chỉ khi người dùng đồng ý |
 
 ## 12. Quy ước phát triển
 
@@ -615,7 +653,7 @@ Mỗi issue cần: môi trường (OS, GNOME, engine + phiên bản, ứng dụn
 
 ## 14. Định hướng dài hạn
 
-VNI (FR-002), gõ tắt (FR-012), whitelist từ tiếng Anh, frontend Fcitx5 cho KDE/Sway/Hyprland, tự động hóa integration test trên Chrome, hỗ trợ bản phân phối khác, cộng đồng đóng góp.
+VNI (FR-002), gõ tắt (FR-012), whitelist từ tiếng Anh, nhận diện ứng dụng (FR-010), frontend Fcitx5 cho KDE/Sway/Hyprland, tự động hóa integration test trên Chrome, hỗ trợ bản phân phối khác, cộng đồng đóng góp.
 
 ## 15. Câu hỏi còn mở
 
@@ -624,8 +662,10 @@ VNI (FR-002), gõ tắt (FR-012), whitelist từ tiếng Anh, frontend Fcitx5 ch
 | Q1 | ~~Framework: Fcitx5 hay IBus?~~ **Đã chốt: IBus** (§6.0) | v0.3.0 |
 | Q2 | ~~License: GPL-3.0-or-later?~~ **Đã chốt: GPL-3.0-or-later** | 2026-11-10 |
 | Q3 | URL thật để tái hiện BUG-001 | Phase 0 |
-| Q4 | Chrome native Wayland có hỗ trợ surrounding text qua IBus không? | Phase 0 (prototype) |
+| Q4 | ~~Chrome native Wayland có hỗ trợ surrounding text qua IBus không?~~ **Có** (ô thường); ô soạn thảo nâng cao bỏ qua lệnh xóa | 0.4.0 |
 | Q5 | Phím tắt mặc định `Ctrl+Shift` có xung đột thực tế trong VS Code không? | Phase 2 |
+| Q7 | Vì sao VS Code báo cursor lệch anchor dù không có vùng chọn? (giả thuyết byte offset đã bị bác bỏ) | Phase 2 |
+| Q8 | Ô cần S1 có "dấu vân tay" `purpose`/`hints` riêng không? | Phase 3 (dữ liệu đang được log thu thập) |
 | Q6 | Settings app dùng GTK4/libadwaita hay Qt6? | Phase 4 |
 
 ## 16. Kết luận

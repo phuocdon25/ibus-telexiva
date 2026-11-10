@@ -34,7 +34,8 @@
 ## Việc còn mở
 
 - [ ] Xác nhận giả thuyết byte offset của VS Code (chờ `matched_by=anchor` trong log).
-- [ ] Chạy playground với prototype (BUG-001/002/004) và thử omnibox thật (BUG-003).
+- [ ] Chạy playground với prototype (BUG-001/002/004).
+- [x] Thử omnibox thật (BUG-003): **đã sửa**, người dùng xác nhận `lo` + Enter điều hướng tới `localhost:8081`.
 - [ ] Thử VS Code editor (Monaco), không chỉ ô chat.
 - [ ] Nghiên cứu cách sửa chữ trong terminal.
 
