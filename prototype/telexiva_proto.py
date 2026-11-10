@@ -155,9 +155,17 @@ class TelexivaProtoEngine(IBus.Engine):
         candidates = [c for c in [self.shown] + self.recent if c] or [""]
         ok = anchor >= cursor and any(before.endswith(c) for c in candidates)
         if not ok:
-            # Chỉ log độ dài, không log nội dung.
+            # Mặc định chỉ log độ dài, không log nội dung.
             self._log("guard mismatch mode=%s before_len=%d cursor=%d anchor=%d shown_len=%d",
                      mode, len(before), cursor, anchor, len(self.shown))
+            if self.cfg.get("debug_text") == "yes":
+                # CHỈ bật tạm thời khi người dùng đồng ý, để chẩn đoán lỗi guard.
+                full = text.get_text() if text else ""
+                lo, hi = max(0, min(cursor, anchor) - 20), max(cursor, anchor) + 20
+                self._log("DEBUG_TEXT window=%r cursor_in_window=%d anchor_in_window=%d "
+                          "shown=%r recent=%r full_len=%d utf8_len=%d",
+                          full[lo:hi], cursor - lo, anchor - lo, self.shown, self.recent,
+                          len(full), len(full.encode("utf-8")))
         return ok or mode == "log"
 
     # ---- thay chữ ----
