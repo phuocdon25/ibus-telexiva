@@ -12,6 +12,8 @@ Không nhằm đầy đủ như FR-001; chỉ đủ để kiểm chứng commit 
 
 from __future__ import annotations
 
+import os
+
 TONE_KEYS = {"s": 1, "f": 2, "r": 3, "x": 4, "j": 5}
 
 # Mỗi nguyên âm -> 6 dạng: không dấu, sắc, huyền, hỏi, ngã, nặng.
@@ -53,6 +55,23 @@ OPEN_ONLY = {
 }
 # Bắt buộc có phụ âm cuối.
 NEED_FINAL = {"ă", "â", "iê", "yê", "uâ", "uô", "ươ", "oă", "uyê", "oo"}
+
+
+_ENGLISH: set[str] | None = None
+ENGLISH_DICT_PATHS = ("/usr/share/dict/words", "/usr/share/dict/american-english")
+
+
+def _english() -> set[str]:
+    """Từ điển tiếng Anh local (gói wamerican), nạp một lần. Rỗng nếu máy không có."""
+    global _ENGLISH
+    if _ENGLISH is None:
+        _ENGLISH = set()
+        for path in ENGLISH_DICT_PATHS:
+            if os.path.exists(path):
+                with open(path, encoding="utf-8", errors="ignore") as f:
+                    _ENGLISH = {w.strip().lower() for w in f if w.strip().isascii()}
+                break
+    return _ENGLISH
 
 
 def _strip(s: str) -> str:
@@ -326,10 +345,11 @@ def _render(keys: str, strict: bool, new_style: bool) -> str:
     # Kết quả không có gì "tiếng Việt" (ví dụ sau khi gõ lặp để hủy: ass -> as, ww -> w):
     # giữ nguyên, không khôi phục về phím gốc.
     if not tone and plain.isascii():
-        # Gõ lặp để hủy ở phím cuối (ass -> as, ww -> w): giữ kết quả hủy.
-        # Nhưng nếu sau đó còn gõ tiếp và từ không phải tiếng Việt (error, effect):
-        # khôi phục nguyên chuỗi phím khi kết thúc từ.
-        if strict and 0 <= undo_idx < len(keys) - 1 and not _is_valid_syllable(plain):
+        # Gõ lặp để hủy (ass -> as, tassk -> task, ww -> w): giữ kết quả hủy, như UniKey.
+        # Ngoại lệ: nếu hủy ở giữa từ và nguyên chuỗi phím là một từ tiếng Anh thật
+        # (error, effect: chữ cái đôi thật, không phải để hủy dấu) -> giữ nguyên chuỗi phím.
+        if (strict and 0 <= undo_idx < len(keys) - 1 and not _is_valid_syllable(plain)
+                and keys.lower() in _english()):
             return keys
         return cased(list(plain))
 

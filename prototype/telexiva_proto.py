@@ -33,7 +33,7 @@ gi.require_version("IBus", "1.0")
 from gi.repository import GLib, GObject, IBus  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from telex import finalize, transform  # noqa: E402
+from telex import _english, finalize, transform  # noqa: E402
 
 ENGINE_NAME = "telexiva-proto"
 BUS_NAME = "org.freedesktop.IBus.TelexivaProto"
@@ -478,7 +478,7 @@ def main():
                                              layout="us", symbol="TX"))
         bus.register_component(component)
 
-    LOG.info("started argv=%s", sys.argv[1:])
+    LOG.info("started argv=%s english_words=%d", sys.argv[1:], len(_english()))  # nạp sẵn từ điển
     GLib.MainLoop().run()
 
 
