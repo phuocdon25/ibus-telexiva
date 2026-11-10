@@ -1,0 +1,24 @@
+# Build
+build/
+build-*/
+cmake-build-*/
+compile_commands.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Packaging artifacts
+*.deb
+*.changes
+*.buildinfo
+
+# Local Claude Code tooling (third-party design skills, not part of the project)
+.claude/
