@@ -6,6 +6,7 @@
 | Thông tin | Giá trị |
 |---|---|
 | Project | Telexiva |
+| Repository / gói | `ibus-telexiva` (theo quy ước đặt tên của hệ sinh thái IBus, như `ibus-unikey`) |
 | Version | 0.3.0 (Planning — sau review lần 2) |
 | Platform | Ubuntu 26.04 LTS |
 | Primary Desktop | GNOME / Wayland |
@@ -24,6 +25,19 @@
 | 0.1.0 | Bản đầu tiên. |
 | 0.2.0 | Thêm FR-009 Commit Strategy, FR-010 Per-app profile, FR-011 Password field; đặc tả Telex theo UniKey Windows; NFR có số đo; môi trường tái hiện lỗi; bỏ `telexivactl`; VNI dời khỏi MVP. |
 | 0.3.0 | **Chốt IBus engine** thay cho Fcitx5 (§6.0). Xác nhận nguyên nhân nghi ngờ của các lỗi là preedit. Đổi FR-009 thành nguyên tắc **"pass-through first"** kèm kiểm tra surrounding text. Thêm prototype Python vào Phase 0. Phụ lục A đổi thành quy trình chạy song song với `ibus-unikey`. |
+
+### Quy ước đặt tên
+
+| Thành phần | Tên |
+|---|---|
+| Repository, gói `.deb` | `ibus-telexiva` |
+| Tên bộ gõ hiển thị trong GNOME Settings | Telexiva |
+| Binary engine | `ibus-engine-telexiva` |
+| Component IBus | `org.freedesktop.IBus.Telexiva` |
+| Ứng dụng cấu hình | `telexiva-settings` |
+| Thư mục cấu hình | `~/.config/telexiva/` |
+
+Tên `ibus-` thể hiện Telexiva là một engine xây dựng trên nền tảng IBus.
 
 ---
 
@@ -412,7 +426,7 @@ Xem FR-007.
 ## 7. Cấu trúc mã nguồn
 
 ```text
-telexiva/
+ibus-telexiva/
 ├── CMakeLists.txt
 ├── README.md
 ├── LICENSE
@@ -644,7 +658,7 @@ ibus engine            # engine đang được dùng
 **Rollback:**
 
 1. Settings → Keyboard → Input Sources → xóa Telexiva.
-2. Gỡ file component và binary (hoặc `sudo apt purge telexiva` khi đã có gói `.deb`).
+2. Gỡ file component và binary (hoặc `sudo apt purge ibus-telexiva` khi đã có gói `.deb`).
 3. `ibus restart`.
 
 `ibus-unikey` và cấu hình của nó không bị đụng tới ở bất kỳ bước nào.
