@@ -35,6 +35,8 @@ class FakeApp:
         self.preedit_mode = False
         self.pending_verify = None
         self.inflight = None
+        self.last_edit_at = 0.0
+        self.awaiting_confirm = None
         self.buf = ""
         self.passthrough = 0
         self.iid = 0
@@ -211,6 +213,21 @@ class EngineSim(unittest.TestCase):
             app.stale, app.mid = app.mid, None   # phím này thấy ảnh chụp của phím trước
             app.type(c)
         self.assertEqual(app.buf, "xuống xuống ")
+
+    def test_fast_double_edit_is_race_not_rich_editor(self):
+        # Hai lần sửa sát nhau, ô bỏ lệnh xóa lần 2 -> không được chuyển cả ô sang nháp.
+        app = FakeApp()
+        real = app.delete_surrounding_text
+        calls = {"n": 0}
+
+        def delete(offset, n):
+            calls["n"] += 1
+            if calls["n"] != 2:         # chỉ bỏ lệnh xóa thứ hai
+                real(offset, n)
+
+        app.delete_surrounding_text = delete
+        app.type("dduocjw ")
+        self.assertFalse(app.preedit_mode)
 
     def test_password_untouched(self):
         app = FakeApp()

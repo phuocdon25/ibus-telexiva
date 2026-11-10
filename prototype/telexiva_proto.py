@@ -113,6 +113,8 @@ class TelexivaProtoEngine(IBus.Engine):
         self.preedit_mode = False
         self.pending_verify = None   # kiểm tra lệnh xóa S2 vừa gửi có được áp dụng không
         self.inflight = None         # (chữ sau khi xóa, chưa chèn; thời điểm) của lần sửa gần nhất
+        self.last_edit_at = 0.0      # thời điểm lần sửa S2 gần nhất
+        self.awaiting_confirm = None # thời điểm gửi lần sửa chưa được ô nhập xác nhận
         self._log("engine created cfg=%s", self.cfg)
 
     def _log(self, fmt: str, *args):
@@ -253,7 +255,11 @@ class TelexivaProtoEngine(IBus.Engine):
         self._set_shown(new)
         if strategy == "s2" and n_del:
             # Ô bỏ qua lệnh xóa sẽ cho ra: chữ cũ + phần chèn (taoj -> "tao" + "ạo").
-            self.pending_verify = {"expect": new, "broken": old + ins, "tries": 3}
+            now = time.monotonic()
+            self.pending_verify = {"expect": new, "broken": old + ins, "tries": 3,
+                                   "gap_ms": (now - self.last_edit_at) * 1000}
+            self.last_edit_at = now
+            self.awaiting_confirm = now
         self._log("replace strategy=%s del=%d ins=%d", strategy, n_del, len(ins))
         return True
 
@@ -271,6 +277,12 @@ class TelexivaProtoEngine(IBus.Engine):
             return
         if any(b.endswith(pv["broken"]) for b in befores):
             self.pending_verify = None
+            if pv["gap_ms"] < 150:
+                # Hai lần sửa quá sát nhau: ô chưa xử lý xong lần trước nên bỏ lệnh xóa.
+                # Đây là "va chạm thời gian", không phải ô kiểu ChatGPT: không chuyển sang nháp.
+                self._log("s2_race gap_ms=%.0f (không chuyển sang nháp)", pv["gap_ms"])
+                self._reset("s2_race")
+                return
             self.preedit_mode = True
             # purpose/hints là "dấu vân tay" của ô, để sau này nhận diện trước (Bước 3).
             self._log("s2_ignored -> preedit purpose=%d hints=0x%x", int(self.purpose), self.hints)
@@ -437,6 +449,13 @@ class TelexivaProtoEngine(IBus.Engine):
         self.purpose = purpose
         self.hints = int(hints)
         self._log("content_type purpose=%d hints=0x%x", int(purpose), int(hints))
+
+    def do_set_surrounding_text(self, text, cursor_pos, anchor_pos):
+        # Ô nhập gửi nội dung mới -> đo thời gian từ lần sửa gần nhất (chỉ ghi số).
+        if self.awaiting_confirm is not None:
+            self._log("confirm_ms=%.1f", (time.monotonic() - self.awaiting_confirm) * 1000)
+            self.awaiting_confirm = None
+        IBus.Engine.do_set_surrounding_text(self, text, cursor_pos, anchor_pos)
 
     def do_set_cursor_location(self, x, y, w, h):
         pass
