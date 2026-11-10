@@ -371,11 +371,15 @@ class TelexivaProtoEngine(IBus.Engine):
         text, cursor, _ = self.get_surrounding_text()
         view = (text.get_text() if text else "")[:cursor]
         if view.endswith(to_delete):
+            self._log("delete_view fresh")
             return len(to_delete)          # bản sao đã mới: không cần bù
         if self.inflight and self.inflight[0] and view.endswith(self.inflight[0]):
+            self._log("delete_view inflight")
             return len(to_delete)          # Mutter đang cập nhật dở ("đã xóa, chưa chèn")
         if not any(r and view.endswith(r) for r in self.recent):
-            return len(to_delete)          # không nhận ra bản sao: giữ cách cũ (guard đã cho qua)
+            # Không nhận ra bản sao: ghi vị trí (số, không có chữ) để phân tích.
+            self._log("delete_view unknown %s", self._diag(view, len(view), len(view)))
+            return len(to_delete)          # giữ cách cũ (guard đã cho qua)
         # Bản sao là một trạng thái cũ hoàn chỉnh của từ: bù theo byte.
         want = len(to_delete.encode("utf-8"))
         total = 0
@@ -428,7 +432,7 @@ class TelexivaProtoEngine(IBus.Engine):
                 self.forward_key_event(keyval, keycode, state)
             self._log("queued key replayed passthrough=%s", "commit" if ch.isprintable() else "forward")
 
-    def _wait_confirm(self, max_ms: float = 30.0):
+    def _wait_confirm(self, max_ms: float = 100.0):
         """Đợi ô nhập xác nhận lần sửa trước (set_surrounding_text), tối đa max_ms.
 
         Hai lần sửa quá sát nhau (< ~13 ms) làm ô nhập bỏ lệnh xóa thứ hai
@@ -437,7 +441,8 @@ class TelexivaProtoEngine(IBus.Engine):
         """
         if self.awaiting_confirm is None:
             return
-        if (time.monotonic() - self.awaiting_confirm) * 1000 > 200:
+        # Trang web nặng (chat React…) có thể mất tới ~50 ms để xác nhận một lần sửa.
+        if (time.monotonic() - self.awaiting_confirm) * 1000 > 300:
             self.awaiting_confirm = None   # quá cũ: ô nhập không gửi xác nhận, bỏ qua
             return
         start = time.monotonic()
