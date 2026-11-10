@@ -39,6 +39,26 @@ class TelexFinal(unittest.TestCase):
             with self.subTest(keys=keys):
                 self.assertEqual(finalize(keys), want)
 
+    # Cùng một từ, nhiều thứ tự gõ khác nhau (mỗi người gõ một kiểu).
+    ORDERS = {
+        "mặc": ["macwj", "mawcj", "majwc", "mawjc", "macjw"],
+        "được": ["dduowcj", "dduwowcj", "dudocwj", "duowcjd", "dduocwj", "dduwocj", "duocwjd"],
+        "người": ["nguoiwf", "nguwowif", "nguowif", "nguoifw", "ngwoif"],
+        "việt": ["vieejt", "vieetj", "vietje", "viejte"],
+        "tiếng": ["tieengs", "tieesng", "tiengse", "tienges"],
+        "những": ["nhuwngx", "nhwngx", "nhungwx", "nhungxw"],
+        "không": ["khoong", "khongo"],
+        "đây": ["ddaay", "daday", "daayd"],
+        "mượn": ["muownj", "muonwj", "mwonj"],
+        "thuở": ["thuowr", "thuwor"],
+    }
+
+    def test_typing_orders(self):
+        for want, variants in self.ORDERS.items():
+            for keys in variants:
+                with self.subTest(keys=keys):
+                    self.assertEqual(finalize(keys), want)
+
     def test_new_style(self):
         self.assertEqual(finalize("hoaf", new_style=True), "hoà")
         self.assertEqual(finalize("thuys", new_style=True), "thuý")

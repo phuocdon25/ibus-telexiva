@@ -104,6 +104,8 @@ class TelexivaProtoEngine(IBus.Engine):
         self.purpose = IBus.InputPurpose.FREE_FORM
         self.raw = ""     # các phím của từ hiện tại
         self.shown = ""   # chữ engine tin là đang nằm trong ứng dụng cho từ hiện tại
+        self.frozen = False  # guard đã chặn: bỏ qua phần còn lại của từ
+        self.recent = []  # các giá trị shown trước đó của từ này (ô nhập có thể báo trễ)
         self._log("engine created cfg=%s", self.cfg)
 
     def _log(self, fmt: str, *args):
@@ -116,6 +118,13 @@ class TelexivaProtoEngine(IBus.Engine):
             self._log("reset why=%s word_len=%d", why, len(self.shown))
         self.raw = ""
         self.shown = ""
+        self.recent = []
+        self.frozen = False
+
+    def _set_shown(self, new: str):
+        if new != self.shown:
+            self.recent = (self.recent + [self.shown])[-2:]
+        self.shown = new
 
     def _new_style(self) -> bool:
         return self.cfg.get("tone") == "new"
@@ -140,7 +149,11 @@ class TelexivaProtoEngine(IBus.Engine):
             return True
         text, cursor, anchor = self.get_surrounding_text()
         before = text.get_text()[:cursor] if text else ""
-        ok = cursor == anchor and before.endswith(self.shown)
+        # - Bôi đen phía SAU con trỏ (inline autocomplete của omnibox) không ảnh hưởng: cho qua.
+        # - Khi gõ nhanh, ô nhập có thể báo surrounding text trễ 1–2 phím: chấp nhận
+        #   cả các trạng thái shown gần nhất.
+        candidates = [c for c in [self.shown] + self.recent if c] or [""]
+        ok = anchor >= cursor and any(before.endswith(c) for c in candidates)
         if not ok:
             # Chỉ log độ dài, không log nội dung.
             self._log("guard mismatch mode=%s before_len=%d cursor=%d anchor=%d shown_len=%d",
@@ -169,7 +182,7 @@ class TelexivaProtoEngine(IBus.Engine):
                                            IBus.ModifierType.RELEASE_MASK)
         if ins:
             self.commit_text(IBus.Text.new_from_string(ins))
-        self.shown = new
+        self._set_shown(new)
         self._log("replace strategy=%s del=%d ins=%d", strategy, n_del, len(ins))
         return True
 
@@ -205,26 +218,27 @@ class TelexivaProtoEngine(IBus.Engine):
                 self._reset("nav" if keyval in RESET_KEYVALS else "other")
             return False   # phím đi thẳng tới ứng dụng
 
+        if self.frozen:
+            return False
+
         raw = self.raw + ch
         new = transform(raw, self._new_style())
 
         if new == self.shown + ch:
             # Không biến đổi: để ứng dụng tự chèn phím, giống English.
-            self.raw, self.shown = raw, new
+            self.raw = raw
+            self._set_shown(new)
             return False
 
         if self._replace(new):
             self.raw = raw
             return True
 
-        # Guard chặn: ứng dụng đã đổi nội dung. Bắt đầu từ mới với phím này.
+        # Guard chặn: không chắc nội dung ô nhập. An toàn nhất là để các phím còn lại
+        # của từ này đi thẳng, không biến đổi gì, cho tới khi kết thúc từ.
         self._reset("guard")
-        self.raw = ch
-        self.shown = transform(ch, self._new_style())
-        if self.shown == ch:
-            return False
-        self.commit_text(IBus.Text.new_from_string(self.shown))
-        return True
+        self.frozen = True
+        return False
 
     def do_focus_in(self):
         self._reset("focus_in")

@@ -111,10 +111,12 @@ def _apply_keys(keys: str):
             continue
 
         if lo == "d":
-            if "d" not in blocked and len(chars) == 1 and chars[0].c == "d":
+            # "d" không bao giờ là phụ âm cuối, nên "d" gõ sau (ở bất kỳ đâu trong từ)
+            # chỉ có thể là biến d đầu từ thành đ: ddi, did, dudocwj…
+            if chars and chars[0].c == "d" and "d" not in blocked:
                 chars[0].c = "đ"
                 continue
-            if len(chars) == 1 and chars[0].c == "đ":
+            if chars and chars[0].c == "đ":     # gõ lặp: đ + d -> dd
                 chars[0].c = "d"
                 blocked.add("d")
             chars.append(_Ch(lo, up))
@@ -253,6 +255,14 @@ def _tone_index(nucleus: str, has_final: bool, new_style: bool) -> int:
 
 def _render(keys: str, strict: bool, new_style: bool) -> str:
     chars, tone = _apply_keys(keys)
+    # Chuẩn hóa cặp u/o có móc để thứ tự đặt w không quan trọng:
+    # - còn chữ phía sau -> "ươ" (được, người, mượn…)
+    # - đứng cuối từ     -> "uơ" (thuở, huơ), vì "ươ" không bao giờ đứng cuối.
+    for i in range(len(chars) - 1):
+        pair = (chars[i].c, chars[i + 1].c)
+        if pair in (("ư", "o"), ("u", "ơ"), ("ư", "ơ")):
+            chars[i].c = "ư" if i + 2 < len(chars) else "u"
+            chars[i + 1].c = "ơ"
     plain = "".join(ch.c for ch in chars)
     if not plain:
         return ""

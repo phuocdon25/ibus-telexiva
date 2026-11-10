@@ -38,6 +38,9 @@ class FakeApp:
         self.purpose = IBus.InputPurpose.FREE_FORM
         self.raw = ""
         self.shown = ""
+        self.recent = []
+        self.frozen = False
+        self.history = []   # buf trước mỗi phím, để mô phỏng surrounding text báo trễ
 
     # API IBus mà engine gọi
     def get_surrounding_text(self):
@@ -55,6 +58,7 @@ class FakeApp:
 
     def type(self, s):
         for c in s:
+            self.history.append(self.buf)
             kv = IBus.unicode_to_keyval(c)
             st = IBus.ModifierType.SHIFT_MASK if c.isupper() else 0
             if not self.do_process_key_event(kv, 0, st):
@@ -99,7 +103,25 @@ class EngineSim(unittest.TestCase):
         app = FakeApp().type("Quee")
         app.buf = "Quên chấm công"      # trang đổi nội dung giữa chừng
         app.type("s")                    # phím dấu: không được xóa nhầm
-        self.assertTrue(app.buf.startswith("Quên chấm công"))
+        self.assertEqual(app.buf, "Quên chấm côngs")
+
+    def test_lagging_surrounding_text(self):
+        # Ô nhập báo surrounding text trễ 1 phím (gõ nhanh): vẫn phải ra "mặc".
+        app = FakeApp()
+
+        def lagging():
+            # Ô nhập chưa kịp cập nhật phím vừa đi thẳng trước đó.
+            prev = app.history[-2] if len(app.history) >= 2 else ""
+            return _Text(prev), len(prev), len(prev)
+
+        app.get_surrounding_text = lagging
+        self.assertEqual(app.type("macwj ").buf, "mặc ")
+
+    def test_inline_completion_selection(self):
+        # Omnibox: phần gợi ý được bôi đen sau con trỏ không được chặn biến đổi.
+        app = FakeApp()
+        app.get_surrounding_text = lambda: (_Text(app.buf + "calhost"), len(app.buf), len(app.buf) + 7)
+        self.assertEqual(app.type("looi").buf, "lôi")
 
     def test_password_untouched(self):
         app = FakeApp()
