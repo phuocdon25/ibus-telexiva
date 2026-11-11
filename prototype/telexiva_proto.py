@@ -248,9 +248,19 @@ class TelexivaProtoEngine(IBus.Engine):
         if n_del:
             self.inflight = (old[:p], time.monotonic())
         strategy = self._strategy()
+        if n_del and strategy == "s2" and ins and self._selection_after_cursor():
+            # Thanh địa chỉ Chrome: phần gợi ý tự điền đang bôi đen sau con trỏ, và Chrome
+            # bỏ qua delete_surrounding_text khi có vùng chọn (gox -> "goõ").
+            # Bước 1: commit phần chèn -> Chrome thay vùng bôi đen bằng nó (vùng chọn mất).
+            # Bước 2: khi Chrome đã xác nhận, xóa (phần cũ + phần vừa chèn) rồi chèn lại.
+            self.commit_text(IBus.Text.new_from_string(ins))
+            self.awaiting_confirm = time.monotonic()
+            self._wait_confirm()
+            n_del += len(ins)
+            self._log("selection_after_cursor -> two_phase del=%d", n_del)
         if n_del:
             if strategy == "s2":
-                n_chars = self._mutter_safe_delete_count(old[p:])
+                n_chars = self._mutter_safe_delete_count(old[p:] + (ins if n_del > len(old) - p else ""))
                 self.delete_surrounding_text(-n_chars, n_chars)
             else:
                 for _ in range(n_del):
@@ -364,6 +374,12 @@ class TelexivaProtoEngine(IBus.Engine):
         self._commit_preedit(final=True)
         return False
 
+    def _selection_after_cursor(self) -> bool:
+        if not self._has_surrounding():
+            return False
+        _, cursor, anchor = self.get_surrounding_text()
+        return anchor > cursor
+
     def _mutter_safe_delete_count(self, to_delete: str):
         """Số KÝ TỰ cần gửi trong delete_surrounding_text để xóa đúng `to_delete`.
 
@@ -375,10 +391,16 @@ class TelexivaProtoEngine(IBus.Engine):
         """
         if not self._has_surrounding():
             return len(to_delete)
-        text, cursor, _ = self.get_surrounding_text()
-        view = (text.get_text() if text else "")[:cursor]
+        text, cursor, anchor = self.get_surrounding_text()
+        full = text.get_text() if text else ""
+        view = full[:cursor]
+        if self.cfg.get("debug_text") == "yes":
+            # CHỈ khi người dùng bật debug: nội dung quanh con trỏ lúc gửi lệnh xóa.
+            lo, hi = max(0, min(cursor, anchor) - 20), max(cursor, anchor) + 20
+            self._log("DEBUG_TEXT at_delete window=%r cursor_in_window=%d anchor_in_window=%d to_delete=%r",
+                      full[lo:hi], cursor - lo, anchor - lo, to_delete)
         if view.endswith(to_delete):
-            self._log("delete_view fresh")
+            self._log("delete_view fresh cursor=%d anchor=%d full_len=%d", cursor, anchor, len(full))
             return len(to_delete)          # bản sao đã mới: không cần bù
         if self.inflight and self.inflight[0] and view.endswith(self.inflight[0]):
             self._log("delete_view inflight")

@@ -288,6 +288,34 @@ class EngineSim(unittest.TestCase):
             app.type(c)
         self.assertEqual(app.buf, "gốc ")
 
+    def test_omnibox_inline_completion_two_phase(self):
+        # Thanh địa chỉ: gõ "go" -> Chrome tự điền phần gợi ý (bôi đen sau con trỏ);
+        # Chrome bỏ qua lệnh xóa khi có vùng chọn; chèn chữ thì thay vùng chọn.
+        app = FakeApp()
+        app.sel = ""
+        history = "google.com"
+
+        def surrounding():
+            return _Text(app.buf + app.sel), len(app.buf), len(app.buf) + len(app.sel)
+
+        def delete(offset, n):
+            if app.sel:
+                return                          # có vùng chọn: bỏ qua lệnh xóa
+            app.buf = app.buf[: len(app.buf) + offset]
+
+        def commit(text):
+            app.sel = ""                        # chữ chèn thay vùng bôi đen
+            app.buf += text.get_text()
+
+        app.get_surrounding_text = surrounding
+        app.delete_surrounding_text = delete
+        app.commit_text = commit
+        for c in "gox":
+            app.type(c)
+            # Sau mỗi phím đi thẳng, Chrome tự điền nếu khớp lịch sử.
+            app.sel = history[len(app.buf):] if history.startswith(app.buf) else ""
+        self.assertEqual(app.buf, "gõ")
+
     def test_password_untouched(self):
         app = FakeApp()
         app.purpose = IBus.InputPurpose.PASSWORD

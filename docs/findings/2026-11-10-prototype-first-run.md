@@ -58,3 +58,9 @@ Quan sát trên playground: `gocs` + `o` ra `gócốc`. Lần sửa thứ hai đ
 Giả thuyết: Mutter đổi `delete_surrounding_text` (tính theo **ký tự**) sang **byte** bằng bản sao surrounding text của nó. Khi bản sao còn là trạng thái cũ (`goc`, toàn ASCII), "xóa 2 ký tự" thành 2 byte, trong khi thực tế phải xóa `óc` = 3 byte. Điểm cắt rơi vào giữa chữ `ó`, nên Chrome bỏ cả lệnh xóa. Giả thuyết này cũng giải thích `đuọcược`, `trươnguongwo`, và vì sao lỗi chỉ xảy ra khi phần bị xóa có chữ có dấu.
 
 Cách xử lý trong prototype: engine thấy đúng bản sao đó. Khi bản sao là một trạng thái cũ hoàn chỉnh của từ, engine chọn số ký tự sao cho Mutter đổi ra đúng số byte thật (log `delete_byte_compensated`). Mô phỏng `test_stale_mutter_copy_byte_conversion` tái hiện `gócốc` khi chưa sửa. **Cần xác nhận bằng log thực tế**, và kiểm chứng bằng mã nguồn Mutter ở Phase 2.
+
+## Bổ sung (2026-11-11): thanh địa chỉ có gợi ý tự điền
+
+Mở tab mới, gõ `gox` ra `goõ`. Debug (người dùng bật tạm, đã tắt và xóa nội dung khỏi log) cho thấy lúc gửi lệnh xóa: nội dung = `go` + phần gợi ý tự điền từ lịch sử, **con trỏ ở 2, anchor ở 48** (phần gợi ý đang được chọn sau con trỏ). Chrome **bỏ qua `delete_surrounding_text` khi có vùng chọn**; ô thường (không vùng chọn) thì xóa bình thường.
+
+Cách xử lý: khi có vùng chọn sau con trỏ, sửa theo hai bước: (1) commit phần chèn, Chrome thay vùng chọn bằng nó; (2) đợi xác nhận, rồi xóa (phần cũ + phần vừa chèn) và chèn lại. Test `test_omnibox_inline_completion_two_phase` ra `goõ` khi chưa sửa.
