@@ -288,33 +288,39 @@ class EngineSim(unittest.TestCase):
             app.type(c)
         self.assertEqual(app.buf, "gốc ")
 
-    def test_omnibox_inline_completion_two_phase(self):
-        # Thanh địa chỉ: gõ "go" -> Chrome tự điền phần gợi ý (bôi đen sau con trỏ);
-        # Chrome bỏ qua lệnh xóa khi có vùng chọn; chèn chữ thì thay vùng chọn.
+    def _omnibox(self, keys, history):
+        """Thanh địa chỉ giả: tự điền gợi ý (bôi đen sau con trỏ) khi khớp lịch sử; bỏ qua
+        lệnh xóa khi có vùng chọn; chữ chèn vào thì thay vùng chọn (như Chrome)."""
         app = FakeApp()
         app.sel = ""
-        history = "google.com"
-
-        def surrounding():
-            return _Text(app.buf + app.sel), len(app.buf), len(app.buf) + len(app.sel)
 
         def delete(offset, n):
-            if app.sel:
-                return                          # có vùng chọn: bỏ qua lệnh xóa
-            app.buf = app.buf[: len(app.buf) + offset]
+            if not app.sel:
+                app.buf = app.buf[: len(app.buf) + offset]
 
         def commit(text):
-            app.sel = ""                        # chữ chèn thay vùng bôi đen
+            app.sel = ""
             app.buf += text.get_text()
 
-        app.get_surrounding_text = surrounding
+        app.get_surrounding_text = lambda: (_Text(app.buf + app.sel), len(app.buf),
+                                            len(app.buf) + len(app.sel))
         app.delete_surrounding_text = delete
         app.commit_text = commit
-        for c in "gox":
+        for c in keys + " ":
             app.type(c)
-            # Sau mỗi phím đi thẳng, Chrome tự điền nếu khớp lịch sử.
-            app.sel = history[len(app.buf):] if history.startswith(app.buf) else ""
-        self.assertEqual(app.buf, "gõ")
+            app.sel = history[len(app.buf):] if app.buf and history.startswith(app.buf) else ""
+        return app.buf.rstrip(" ")
+
+    def test_omnibox_inline_completion_any_word(self):
+        # Không phụ thuộc từ cụ thể: mọi từ cần sửa khi đang có gợi ý bôi đen.
+        cases = [("gox", "google.com", "gõ"), ("tieengs", "tiki.vn", "tiếng"),
+                 ("vieejt", "viblo.asia", "việt"), ("dduowcj", "docs.google.com", "được"),
+                 ("nguowif", "nguoiquansat.vn", "người"), ("hocj", "hoclieu.vn", "học"),
+                 ("thoiwf", "thoitiet.vn", "thời"), ("khoong", "khoahoc.tv", "không"),
+                 ("muaw", "mua.vn", "mưa"), ("lo", "localhost:8081", "lo")]
+        for keys, history, want in cases:
+            with self.subTest(keys=keys):
+                self.assertEqual(self._omnibox(keys, history), want)
 
     def test_password_untouched(self):
         app = FakeApp()
