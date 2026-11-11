@@ -2,7 +2,7 @@
 
 Bộ gõ tiếng Việt (Telex) cho Linux, chạy dưới dạng engine của [IBus](https://github.com/ibus/ibus). Mục tiêu là gõ giống UniKey trên Windows và ổn định trong trình duyệt và VS Code trên Ubuntu GNOME/Wayland.
 
-> **Trạng thái: Phase 1 (core C++).** Bản prototype Python đang được dùng hằng ngày để kiểm chứng thiết kế. Core C++20 (quy tắc Telex) đã khớp hoàn toàn với prototype; engine IBus bằng C++ chưa có. Xem [requirement.md](requirement.md).
+> **Trạng thái: Phase 2 (engine IBus C++, thử nghiệm).** Bản prototype Python đang được dùng hằng ngày. Core C++20 khớp hoàn toàn với prototype; engine IBus C++ đã chạy được và đang được thử. Xem [requirement.md](requirement.md).
 
 ## Vì sao có dự án này
 
@@ -40,6 +40,14 @@ Gỡ cài đặt: xóa Telexiva khỏi Input Sources, rồi chạy `./prototype/
 
 Chi tiết về cấu hình và log nằm trong [prototype/README.md](prototype/README.md).
 
+## Cài bản C++ (thử nghiệm, Phase 2)
+
+```bash
+./scripts/dev-install.sh   # build release, chạy test, đăng ký engine với IBus (cần sudo một lần)
+```
+
+Thêm bộ gõ **Telexiva (C++)** trong Settings → Keyboard → Input Sources. Bản C++ chạy song song với bản prototype Python và `ibus-unikey`. Log nằm ở `~/.cache/telexiva/engine.log` (không chứa nội dung gõ); cấu hình tùy chọn ở `~/.config/telexiva.conf` (`tone = new`, …). Gỡ: `./scripts/dev-uninstall.sh`.
+
 ## Build core C++
 
 Cần: `g++` (C++20), `cmake`, `ninja-build`, `catch2`; để chuẩn bị Phase 2 thì thêm `pkg-config` và `libibus-1.0-dev`.
@@ -67,7 +75,10 @@ Khi test thủ công trên trình duyệt, dùng [tools/playground/index.html](t
 |---|---|
 | [requirement.md](requirement.md) | Đặc tả, quyết định kiến trúc, lộ trình |
 | [docs/findings/](docs/findings/) | Kết quả các lần thử nghiệm |
-| [src/core/](src/core/) | Core C++20: quy tắc Telex, không phụ thuộc IBus |
+| [src/core/](src/core/) | Core C++20: quy tắc Telex, Composer, không phụ thuộc IBus |
+| [src/engine/](src/engine/) | Logic engine (S2, preedit, guard, đợi xác nhận…), giao tiếp qua `Host` |
+| [src/ibus/](src/ibus/) | Nối với IBus: `ibus-engine-telexiva` |
+| [scripts/](scripts/) | Cài / gỡ bản dev |
 | [tests/](tests/) | Test Catch2, bảng test dùng chung (TSV), test so khớp C++ ↔ Python |
 | [prototype/](prototype/) | Engine IBus bằng Python (Phase 0) |
 | [tools/playground/](tools/playground/) | Trang HTML để test bộ gõ trên trình duyệt |

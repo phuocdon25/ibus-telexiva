@@ -578,6 +578,8 @@ Engine API (`EditAction`), state machine, mô hình âm tiết, Telex đầy đ�
 
 ### Phase 2 — IBus Engine (C++)
 
+**Trạng thái (2026-11-11): bản đầu tiên chạy được, chờ người dùng thử.** `src/engine` (logic engine, không phụ thuộc IBus, giao tiếp qua `Host`) chuyển toàn bộ bài học của prototype: đợi xác nhận + hàng đợi phím, bù byte cho Mutter, sửa hai bước khi có vùng chọn, guard, kiểm tra sau khi sửa và tự chuyển S1. `src/ibus/main.cpp` nối với IBus (engine `telexiva`, hiển thị "Telexiva (C++)", chạy song song với prototype). 12 test engine với ô nhập giả (`tests/engine`). Cài bản dev: `scripts/dev-install.sh`. Chưa có: phím tắt V/E và indicator (FR-004), settings.
+
 Wrapper GObject, đăng ký engine, nhận key event, strategy S2 + S1 tự động + guard (chịu được các sai lệch ở FR-009) + đợi xác nhận giữa hai lần sửa, ngữ cảnh code (FR-013), input context, ô mật khẩu, chuyển chế độ V/E, indicator. **Deliverable:** thay prototype bằng engine C++; gõ tiếng Việt được hằng ngày trong ứng dụng GTK.
 
 ### Phase 3 — Chrome, VS Code & Regression

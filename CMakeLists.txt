@@ -22,6 +22,24 @@ add_library(telexiva_core STATIC src/core/telex.cpp src/core/composer.cpp)
 target_include_directories(telexiva_core PUBLIC src/core/include)
 telexiva_warnings(telexiva_core)
 
+# --- Engine: thực hiện EditAction trong ứng dụng thật, không phụ thuộc IBus -------
+add_library(telexiva_engine STATIC src/engine/engine.cpp)
+target_include_directories(telexiva_engine PUBLIC src/engine/include)
+target_link_libraries(telexiva_engine PUBLIC telexiva_core)
+telexiva_warnings(telexiva_engine)
+
+# --- IBus engine (Phase 2) -----------------------------------------------------
+option(TELEXIVA_BUILD_IBUS "Build the IBus engine (needs libibus-1.0-dev)" ON)
+if(TELEXIVA_BUILD_IBUS)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(IBUS REQUIRED IMPORTED_TARGET ibus-1.0)
+    add_executable(ibus-engine-telexiva src/ibus/main.cpp)
+    target_link_libraries(ibus-engine-telexiva PRIVATE telexiva_engine PkgConfig::IBUS)
+    telexiva_warnings(ibus-engine-telexiva)
+    # Macro GObject (G_DEFINE_TYPE…) sinh code có cast kiểu C: tắt -Wconversion riêng file này.
+    set_source_files_properties(src/ibus/main.cpp PROPERTIES COMPILE_OPTIONS "-Wno-conversion;-Wno-pedantic")
+endif()
+
 # --- Công cụ dòng lệnh: thử nhanh và so khớp với prototype Python -----------
 add_executable(telexiva-telex tools/telex_cli.cpp)
 target_link_libraries(telexiva-telex PRIVATE telexiva_core)
@@ -33,8 +51,9 @@ if(TELEXIVA_BUILD_TESTS)
     find_package(Catch2 3 REQUIRED)
     include(Catch)
 
-    add_executable(telexiva_core_tests tests/core/test_telex.cpp tests/core/test_composer.cpp)
-    target_link_libraries(telexiva_core_tests PRIVATE telexiva_core Catch2::Catch2WithMain)
+    add_executable(telexiva_core_tests tests/core/test_telex.cpp tests/core/test_composer.cpp
+                                       tests/engine/test_engine.cpp)
+    target_link_libraries(telexiva_core_tests PRIVATE telexiva_engine Catch2::Catch2WithMain)
     target_compile_definitions(telexiva_core_tests PRIVATE
         TELEXIVA_CASES_TSV="${CMAKE_SOURCE_DIR}/tests/data/telex_cases.tsv")
     telexiva_warnings(telexiva_core_tests)

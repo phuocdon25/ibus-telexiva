@@ -71,6 +71,7 @@ public:
     [[nodiscard]] const std::string& raw() const { return raw_; }
     [[nodiscard]] const std::u32string& shown() const { return shown_; }
     [[nodiscard]] bool frozen() const { return frozen_; }
+    [[nodiscard]] char32_t prev_char() const { return prev_char_; }
 
 private:
     EditAction diff_to(const std::u32string& next);

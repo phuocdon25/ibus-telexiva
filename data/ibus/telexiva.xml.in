@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Telexiva (C++). Được scripts/dev-install.sh (hoặc gói .deb) sinh ra từ file .in này. -->
+<component>
+  <name>org.freedesktop.IBus.Telexiva</name>
+  <description>Telexiva — Vietnamese Telex input method</description>
+  <exec>@EXEC@ --ibus</exec>
+  <version>0.1.0</version>
+  <author>phuocdon25</author>
+  <license>GPL-3.0-or-later</license>
+  <homepage>https://github.com/phuocdon25/ibus-telexiva</homepage>
+  <textdomain>telexiva</textdomain>
+  <engines>
+    <engine>
+      <name>telexiva</name>
+      <language>vi</language>
+      <license>GPL-3.0-or-later</license>
+      <author>phuocdon25</author>
+      <layout>us</layout>
+      <longname>Telexiva (C++)</longname>
+      <description>Telex, không preedit (pass-through first)</description>
+      <symbol>VI</symbol>
+      <rank>0</rank>
+    </engine>
+  </engines>
+</component>
