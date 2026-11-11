@@ -62,6 +62,49 @@ def english_words(limit=30000):
     return set(words[:limit])
 
 
+def sentences(n=4000, seed=20261111):
+    """Câu gõ hỗn hợp: âm tiết tiếng Việt (nhiều thứ tự gõ), từ tiếng Anh, code, URL,
+    email, số và dấu câu — để so khớp Composer (C++) với engine Python ở mức câu."""
+    rng = random.Random(seed)
+    viet = sorted(synthetic_syllables())
+    eng = sorted(english_words(5000)) or ["const", "error", "test"]
+    seps = [" ", " ", " ", ", ", ". ", "_", "/", "@", ".", "-", "=", " $", ": ", "! "]
+    out = []
+    for _ in range(n):
+        words = []
+        for _ in range(rng.randint(1, 8)):
+            r = rng.random()
+            if r < 0.6:
+                words.append(rng.choice(viet))
+            elif r < 0.85:
+                words.append(rng.choice(eng))
+            else:
+                words.append(str(rng.randint(0, 2000000)))
+            words.append(rng.choice(seps))
+        out.append("".join(words) + " ")
+    return out
+
+
+def check_compose(cli):
+    sys.path.insert(0, os.path.join(HERE, "..", "..", "prototype"))
+    import test_engine_sim as sim   # engine Python + ô nhập giả (cần gi/IBus)
+    sim.T.LOG.disabled = True
+    inputs = sentences()
+    proc = subprocess.run([cli, "--compose"], input="\n".join(inputs) + "\n", capture_output=True,
+                          text=True, encoding="utf-8", check=True)
+    lines = proc.stdout.splitlines()
+    bad = []
+    for keys, line in zip(inputs, lines):
+        cpp = line.split("\t", 1)[1]
+        py = sim.FakeApp().type(keys).buf
+        if cpp != py:
+            bad.append((keys, py, cpp))
+    print(f"Parity (câu, --compose): {len(inputs)} câu, {len(bad)} khác biệt")
+    for keys, py, cpp in bad[:10]:
+        print(f"  {keys!r}\n    py ={py!r}\n    cpp={cpp!r}")
+    return not bad
+
+
 def python_results(keys):
     return (telex.transform(keys), telex.finalize(keys),
             telex.transform(keys, new_style=True), telex.finalize(keys, new_style=True))
@@ -96,7 +139,8 @@ def main():
     for keys, py, cpp in mismatches[:20]:
         diff = ", ".join(f"{lab}: py={p!r} cpp={c!r}" for lab, p, c in zip(labels, py, cpp) if p != c)
         print(f"  {keys!r}: {diff}")
-    sys.exit(1 if mismatches else 0)
+    compose_ok = check_compose(cli)
+    sys.exit(1 if mismatches or not compose_ok else 0)
 
 
 if __name__ == "__main__":

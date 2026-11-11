@@ -565,7 +565,14 @@ So sánh hành vi giữa `ibus-unikey`, Telexiva ở từng strategy và English
 
 ### Phase 1 — Telexiva Core
 
-**Trạng thái (2026-11-10): đang làm.** Đã có: `src/core` (C++20) chuyển từ prototype; bảng test dùng chung `tests/data/telex_cases.tsv`; test so khớp với prototype trên 225.966 chuỗi phím: **0 khác biệt**; tốc độ ~0,5 µs/lần gọi (NFR-001: < 0,1 ms), 4 MB RAM. Còn lại: API `EditAction` cho engine, fuzz test, benchmark chính thức, cân nhắc `ukengine` làm oracle thứ hai.
+**Trạng thái (2026-11-11): gần xong.** Đã có:
+- `src/core/telex.*`: quy tắc Telex C++20 chuyển từ prototype; bảng test dùng chung `tests/data/telex_cases.tsv`.
+- `src/core/composer.*`: `Composer` + `EditAction` (PassThrough / Replace), gồm pass-through first, khôi phục khi kết thúc từ, ngữ cảnh code/URL/email (FR-013), `freeze()` cho guard của engine.
+- So khớp với prototype: 225.966 chuỗi phím (transform/finalize) và 4.000 câu hỗn hợp (`--compose`): **0 khác biệt**.
+- Fuzz test (Catch2, 50.000 chuỗi ngẫu nhiên): không crash, không xóa quá nội dung, UTF-8 luôn hợp lệ.
+- Tốc độ ~0,5 µs/lần gọi (NFR-001: < 0,1 ms), 4 MB RAM.
+
+Còn lại (không chặn Phase 2): benchmark chính thức, cân nhắc `ukengine` làm oracle thứ hai.
 
 Engine API (`EditAction`), state machine, mô hình âm tiết, Telex đầy đủ theo FR-001 (dùng bảng test của prototype làm chuẩn; cân nhắc `ukengine` của Unikey làm oracle so sánh tự động), kiểm tra chính tả và tự khôi phục, backspace/reset, unit test dạng bảng, fuzz, benchmark. **Deliverable:** core độc lập IBus, test xanh, đạt NFR-001 cho core.
 
@@ -600,6 +607,8 @@ Debian package (engine, component XML, GSettings schema, settings app; phụ thu
 - [ ] Không ảnh hưởng bộ gõ hiện tại khi chưa được chọn.
 - [ ] Có hướng dẫn build, cài đặt và rollback.
 - [ ] Có báo cáo regression cho bốn lỗi ở §8.3.
+
+**Tiêu chí "đủ tốt" của người dùng chính (2026-11-11):** sau 2 ngày dùng prototype hằng ngày, người dùng đánh giá "trong phạm vi sử dụng của tôi thì khá ổn", chấp nhận sai lẻ tẻ khi gõ rất nhanh. Log lúc đó ghi ~1,3% lần sửa chữ gặp sự cố (gồm cả các phiên bản trước khi sửa). Ưu tiên sửa lỗi **lặp lại** hoặc **gây khó chịu**; không theo đuổi các ca hiếm tốn nhiều công.
 
 Sửa được tất cả các lỗi là mục tiêu, nhưng **không phải điều kiện bắt buộc của MVP** nếu chứng minh được nguyên nhân nằm ngoài engine. MVP phải chỉ ra được strategy nào khắc phục lỗi nào.
 

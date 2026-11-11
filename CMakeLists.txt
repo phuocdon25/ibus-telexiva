@@ -18,7 +18,7 @@ function(telexiva_warnings target)
 endfunction()
 
 # --- Core: quy tắc Telex, không phụ thuộc IBus (NFR-005) --------------------
-add_library(telexiva_core STATIC src/core/telex.cpp)
+add_library(telexiva_core STATIC src/core/telex.cpp src/core/composer.cpp)
 target_include_directories(telexiva_core PUBLIC src/core/include)
 telexiva_warnings(telexiva_core)
 
@@ -33,7 +33,7 @@ if(TELEXIVA_BUILD_TESTS)
     find_package(Catch2 3 REQUIRED)
     include(Catch)
 
-    add_executable(telexiva_core_tests tests/core/test_telex.cpp)
+    add_executable(telexiva_core_tests tests/core/test_telex.cpp tests/core/test_composer.cpp)
     target_link_libraries(telexiva_core_tests PRIVATE telexiva_core Catch2::Catch2WithMain)
     target_compile_definitions(telexiva_core_tests PRIVATE
         TELEXIVA_CASES_TSV="${CMAKE_SOURCE_DIR}/tests/data/telex_cases.tsv")
