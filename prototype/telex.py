@@ -353,6 +353,12 @@ def _render(keys: str, strict: bool, new_style: bool) -> str:
             return keys
         return cased(list(plain))
 
+    # Chữ viết tắt toàn phụ âm bắt đầu bằng "dd" (đc, đt, đk): người gõ chủ động muốn "đ",
+    # nên giữ nguyên dù không phải âm tiết. Không áp dụng cho "d" ở giữa từ (dvd giữ nguyên).
+    if (not tone and keys[:2].lower() == "dd" and plain[0] == "đ"
+            and all(c.isalpha() and c not in VOWELS for c in plain)):
+        return cased(list(plain))
+
     parts = _split(plain)
     if parts is None:
         return keys

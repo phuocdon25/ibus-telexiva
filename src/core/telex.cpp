@@ -597,6 +597,16 @@ std::string render(std::string_view keys, bool strict, const TelexOptions& optio
         return cased(plain);
     }
 
+    // Chữ viết tắt toàn phụ âm bắt đầu bằng "dd" (đc, đt, đk): người gõ chủ động muốn "đ",
+    // nên giữ nguyên dù không phải âm tiết. Không áp dụng cho "d" ở giữa từ (dvd giữ nguyên).
+    if (a.tone == 0 && keys.size() >= 2 && std::tolower(static_cast<unsigned char>(keys[0])) == 'd' &&
+        std::tolower(static_cast<unsigned char>(keys[1])) == 'd' && plain[0] == U'đ' &&
+        std::all_of(plain.begin(), plain.end(), [&](char32_t c) {
+            return !t.is_vowel(c) && (c == U'đ' || (c < 0x80 && std::isalpha(static_cast<int>(c))));
+        })) {
+        return cased(plain);
+    }
+
     const auto p = split(plain);
     if (!p) {
         return std::string(keys);

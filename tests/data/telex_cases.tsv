@@ -63,6 +63,16 @@ finalize	old	address	address	cases
 finalize	old	tassk	task	cases
 finalize	old	tassks	tasks	cases
 finalize	old	Tassk	Task	cases
+finalize	old	ddc	đc	cases
+finalize	old	ddt	đt	cases
+finalize	old	ddk	đk	cases
+finalize	old	DDC	ĐC	cases
+finalize	old	Ddc	Đc	cases
+finalize	old	dvd	dvd	cases
+finalize	old	dnd	dnd	cases
+finalize	old	ko	ko	cases
+finalize	old	bn	bn	cases
+finalize	old	ntn	ntn	cases
 finalize	old	lo	lo	cases
 finalize	old	Q	Q	cases
 finalize	old	localhost	localhost	cases

@@ -32,6 +32,9 @@ class TelexFinal(unittest.TestCase):
         ("const", "const"), ("width", "width"), ("vietj", "vietj"),
         ("error", "error"), ("effect", "effect"), ("success", "success"), ("address", "address"),
         ("tassk", "task"), ("tassks", "tasks"), ("Tassk", "Task"),  # ss để hủy dấu sắc (thói quen UniKey)
+        # chữ viết tắt
+        ("ddc", "đc"), ("ddt", "đt"), ("ddk", "đk"), ("DDC", "ĐC"), ("Ddc", "Đc"),
+        ("dvd", "dvd"), ("dnd", "dnd"), ("ko", "ko"), ("bn", "bn"), ("ntn", "ntn"),
         # không biến đổi
         ("lo", "lo"), ("Q", "Q"), ("localhost", "localhost"),
     ]
