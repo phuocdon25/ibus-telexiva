@@ -32,7 +32,8 @@ HORN_DIACRITICS = {"â", "ă", "ê", "ô", "ơ", "ư"}
 
 INITIALS = sorted(
     ["ngh", "ng", "nh", "ch", "gh", "gi", "kh", "ph", "qu", "th", "tr",
-     "b", "c", "d", "đ", "g", "h", "k", "l", "m", "n", "p", "r", "s", "t", "v", "x"],
+     "b", "c", "d", "đ", "g", "h", "k", "l", "m", "n", "p", "r", "s", "t", "v", "x",
+     "z"],  # z: khẩu ngữ (zô = vô, zậy = vậy)
     key=len, reverse=True,
 )
 FINALS = {"c", "ch", "m", "n", "ng", "nh", "p", "t"}
@@ -243,6 +244,11 @@ def _apply_keys(keys: str):
     return chars, tone, undo_idx
 
 
+def _undo_adjacent(keys: str, undo_idx: int) -> bool:
+    """Phím hủy có gõ liền ngay sau phím cùng loại không (ass, tassk: có; posts, tests: không)."""
+    return undo_idx >= 1 and keys[undo_idx].lower() == keys[undo_idx - 1].lower()
+
+
 def _is_qu_u(chars, i: int) -> bool:
     return i == 1 and chars[0].c == "q" and chars[1].c == "u"
 
@@ -348,8 +354,13 @@ def _render(keys: str, strict: bool, new_style: bool) -> str:
         # Gõ lặp để hủy (ass -> as, tassk -> task, ww -> w): giữ kết quả hủy, như UniKey.
         # Ngoại lệ: nếu hủy ở giữa từ và nguyên chuỗi phím là một từ tiếng Anh thật
         # (error, effect: chữ cái đôi thật, không phải để hủy dấu) -> giữ nguyên chuỗi phím.
-        if (strict and 0 <= undo_idx < len(keys) - 1 and not _is_valid_syllable(plain)
-                and keys.lower() in _english()):
+        # Thêm: chuỗi phím là từ tiếng Anh mà kết quả hủy thì không (tests -> "tets",
+        # lists -> "lits"): giữ chuỗi phím. "ass" -> "as" vẫn giữ vì "as" cũng là từ tiếng Anh.
+        # Hủy không gõ liền nhau (posts: s…s) là chữ đôi tự nhiên của tiếng Anh, không phải hủy dấu.
+        if strict and undo_idx >= 0 and keys.lower() in _english() and (
+                plain not in _english()
+                or not _undo_adjacent(keys, undo_idx)
+                or (undo_idx < len(keys) - 1 and not _is_valid_syllable(plain))):
             return keys
         return cased(list(plain))
 
@@ -382,6 +393,11 @@ def _render(keys: str, strict: bool, new_style: bool) -> str:
             and not (final and final[0] in "cpt" and tone in (2, 3, 4))
         )
     if not ok:
+        return keys
+
+    # Từ bắt đầu bằng "z" (khẩu ngữ: zô, zậy) dễ trùng tiếng Anh (zero, zoom, zips): nếu
+    # nguyên chuỗi phím là từ tiếng Anh và kết quả có dấu thanh hoặc phụ âm cuối -> giữ tiếng Anh.
+    if initial == "z" and (tone or final) and keys.lower() in _english():
         return keys
 
     out = [ch.c for ch in chars]

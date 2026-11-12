@@ -103,7 +103,7 @@ const Tables& tables() {
 
         t.initials = {U"ngh", U"ng", U"nh", U"ch", U"gh", U"gi", U"kh", U"ph", U"qu", U"th", U"tr",
                       U"b",   U"c",  U"d",  U"đ",  U"g",  U"h",  U"k",  U"l",  U"m",  U"n",  U"p",
-                      U"r",   U"s",  U"t",  U"v",  U"x"};
+                      U"r",   U"s",  U"t",  U"v",  U"x",  U"z" /* khẩu ngữ: zô, zậy */};
         std::stable_sort(t.initials.begin(), t.initials.end(),
                          [](const u32& a, const u32& b) { return a.size() > b.size(); });
 
@@ -589,9 +589,16 @@ std::string render(std::string_view keys, bool strict, const TelexOptions& optio
         // Gõ lặp để hủy (ass -> as, tassk -> task, ww -> w): giữ kết quả hủy, như UniKey.
         // Ngoại lệ: nếu hủy ở giữa từ và nguyên chuỗi phím là một từ tiếng Anh thật
         // (error, effect: chữ cái đôi thật) -> giữ nguyên chuỗi phím.
-        if (strict && a.undo_idx >= 0 && a.undo_idx < static_cast<int>(keys.size()) - 1 &&
-            !is_valid_syllable(plain) && options.english != nullptr &&
-            options.english->contains(lower_ascii(keys))) {
+        // Thêm: chuỗi phím là từ tiếng Anh mà kết quả hủy thì không (tests -> "tets",
+        // lists -> "lits"): giữ chuỗi phím. "ass" -> "as" vẫn giữ vì "as" cũng là từ tiếng Anh.
+        if (strict && a.undo_idx >= 0 && options.english != nullptr &&
+            options.english->contains(lower_ascii(keys)) &&
+            (!options.english->contains(to_utf8(plain)) ||
+             // Hủy không gõ liền nhau (posts: s…s) là chữ đôi tự nhiên của tiếng Anh.
+             !(a.undo_idx >= 1 &&
+               std::tolower(static_cast<unsigned char>(keys[static_cast<std::size_t>(a.undo_idx)])) ==
+                   std::tolower(static_cast<unsigned char>(keys[static_cast<std::size_t>(a.undo_idx) - 1]))) ||
+             (a.undo_idx < static_cast<int>(keys.size()) - 1 && !is_valid_syllable(plain)))) {
             return std::string(keys);
         }
         return cased(plain);
@@ -630,6 +637,13 @@ std::string render(std::string_view keys, bool strict, const TelexOptions& optio
                harsh_tone);
     }
     if (!ok) {
+        return std::string(keys);
+    }
+
+    // Từ bắt đầu bằng "z" (khẩu ngữ: zô, zậy) dễ trùng tiếng Anh (zero, zoom, zips): nếu
+    // nguyên chuỗi phím là từ tiếng Anh và kết quả có dấu thanh hoặc phụ âm cuối -> giữ tiếng Anh.
+    if (initial == U"z" && (a.tone != 0 || !final.empty()) && options.english != nullptr &&
+        options.english->contains(lower_ascii(keys))) {
         return std::string(keys);
     }
 

@@ -35,6 +35,12 @@ class TelexFinal(unittest.TestCase):
         # chữ viết tắt
         ("ddc", "đc"), ("ddt", "đt"), ("ddk", "đk"), ("DDC", "ĐC"), ("Ddc", "Đc"),
         ("dvd", "dvd"), ("dnd", "dnd"), ("ko", "ko"), ("bn", "bn"), ("ntn", "ntn"),
+        # khẩu ngữ với z
+        ("zoo", "zô"), ("Zoo", "Zô"), ("zaayj", "zậy"), ("zif", "zì"), ("zui", "zui"),
+        ("zero", "zero"), ("zoom", "zoom"), ("zips", "zips"), ("zest", "zest"), ("zests", "zests"),
+        # số nhiều tiếng Anh sau dấu sắc (s s): không được mất chữ s
+        ("tests", "tests"), ("lists", "lists"), ("posts", "posts"), ("costs", "costs"),
+        ("hosts", "hosts"), ("ass", "as"),
         # không biến đổi
         ("lo", "lo"), ("Q", "Q"), ("localhost", "localhost"),
     ]
