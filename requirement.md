@@ -255,6 +255,11 @@ Có hai tầng chuyển đổi, cần phân biệt rõ:
 
 Nhận sự kiện phím, cập nhật từ đang soạn, commit, backspace, reset, focus change, hủy composition. Backspace xóa từng ký tự **đã hiển thị** (giống UniKey): `việt` + Backspace → `việ`, và engine vẫn tiếp tục biến đổi đúng nếu gõ tiếp.
 
+**Sửa từ đã gõ (bổ sung 2026-11-17, bản C++):**
+- Backspace trong lúc gõ: engine nhớ phần còn lại, nên đổi dấu được ngay (`việt` → Backspace → `việ` → `s` → `viế`).
+- Quay lại một từ đã gõ xong (Space rồi Backspace, click hoặc mũi tên ra sau từ) và gõ phím dấu/biến đổi (`s f r x j z w a e o d`): engine "nhặt lại" từ ngay trước con trỏ (suy ngược chuỗi phím bằng `keys_for`) và sửa (`học` + `s` → `hóc`).
+- Không nhặt lại: từ tiếng Anh có trong từ điển, con trỏ ở giữa từ, có vùng chọn, ngữ cảnh code, chế độ nháp.
+
 ### FR-006: Input context — P0
 
 Mỗi input context có trạng thái composition riêng. Đổi focus giữa hai ô, giữa hai tab, hoặc giữa Chrome và VS Code không làm rò trạng thái.

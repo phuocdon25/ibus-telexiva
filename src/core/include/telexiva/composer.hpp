@@ -61,6 +61,10 @@ public:
     // Phím điều hướng, click, đổi focus, phím tắt…: bỏ từ hiện tại, không sửa gì.
     void reset();
 
+    // Nhặt lại một từ đã có trong ô nhập (sau Backspace, click, Space rồi Backspace…) để
+    // tiếp tục gõ/sửa dấu. Chỉ nhận nếu suy ngược được chuỗi phím tái tạo đúng từ đó.
+    bool attach(const std::u32string& word);
+
     // Engine báo không chắc nội dung ô nhập (guard chặn): các chữ còn lại của từ đi thẳng.
     void freeze() { frozen_ = true; }
 

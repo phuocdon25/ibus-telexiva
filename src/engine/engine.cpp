@@ -2,6 +2,7 @@
 #include "telexiva/engine.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 
 namespace telexiva {
@@ -17,6 +18,28 @@ bool ends_with(const std::u32string& s, const std::u32string& suffix) {
 }
 
 std::size_t utf8_size(const std::u32string& s) { return u32_to_utf8(s).size(); }
+
+// Chữ cái (ASCII hoặc chữ Latin có dấu của tiếng Việt).
+bool is_word_char(char32_t c) {
+    return (c < 0x80 && ((c >= U'a' && c <= U'z') || (c >= U'A' && c <= U'Z'))) ||
+           (c >= 0xC0 && c <= 0x1EF9 && c != 0xD7 && c != 0xF7);
+}
+
+// Phím có thể làm đổi chữ đã gõ (dấu thanh, mũ, móc, đ).
+bool is_modifier_key(char32_t c) {
+    switch (c < 0x80 ? static_cast<char32_t>(std::tolower(static_cast<int>(c))) : c) {
+        case U's': case U'f': case U'r': case U'x': case U'j': case U'z':
+        case U'w': case U'a': case U'e': case U'o': case U'd':
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool is_code_char(char32_t c) {
+    return c == U'_' || c == U'.' || c == U'/' || c == U'@' || c == U':' || c == U'\\' || c == U'$' ||
+           c == U'#' || c == U'=' || c == U'~' || c == U'<' || c == U'>';
+}
 
 std::string fmt(const char* format, double a = 0, double b = 0, double c = 0, double d = 0) {
     char buf[256];
@@ -130,6 +153,18 @@ bool Engine::handle(const Key& key) {
                 log(c == U'@' ? "email_local_part -> restore raw" : "finalize restore");
                 apply_edit(old, r.fix);
             }
+        } else if (key.kind == Key::Kind::Backspace && !composer_.raw().empty() && !composer_.frozen()) {
+            // Backspace trong lúc gõ: ứng dụng xóa ký tự cuối; Composer nhớ phần còn lại để
+            // vẫn sửa dấu được (việt -> Backspace -> việ -> s -> viế).
+            std::u32string rest = composer_.shown();
+            rest.pop_back();
+            if (rest.empty() || !composer_.attach(rest)) {
+                composer_.reset();
+            }
+            recent_.clear();
+            inflight_.reset();
+            pending_.reset();
+            return false;
         } else {
             composer_.reset();
         }
@@ -138,6 +173,9 @@ bool Engine::handle(const Key& key) {
         return false;  // phím đi thẳng tới ứng dụng
     }
 
+    if (composer_.raw().empty() && !composer_.frozen() && has_surrounding_ && is_modifier_key(key.ch)) {
+        try_reattach();
+    }
     const std::u32string old = composer_.shown();
     const bool was_frozen = composer_.frozen();
     const EditAction a = composer_.letter(static_cast<char>(key.ch));
@@ -161,6 +199,44 @@ bool Engine::handle(const Key& key) {
     recent_.clear();
     inflight_.reset();
     return false;
+}
+
+void Engine::try_reattach() {
+    // Nhặt lại từ ngay trước con trỏ (sau click, mũi tên, Space rồi Backspace…) để sửa dấu.
+    const Surrounding s = host_.surrounding();
+    const std::size_t cursor = std::min<std::size_t>(s.cursor, s.text.size());
+    if (s.anchor != s.cursor) {
+        return;  // đang có vùng chọn
+    }
+    if (cursor < s.text.size() && is_word_char(s.text[cursor])) {
+        return;  // con trỏ ở giữa từ: đặt dấu có thể sai, bỏ qua
+    }
+    std::size_t b = cursor;
+    while (b > 0 && is_word_char(s.text[b - 1]) && cursor - b < 12) {
+        --b;
+    }
+    if (b == cursor || (b > 0 && is_word_char(s.text[b - 1]))) {
+        return;  // không có từ, hoặc từ quá dài (không phải tiếng Việt)
+    }
+    if (b > 0 && is_code_char(s.text[b - 1])) {
+        return;  // ngữ cảnh code (FR-013)
+    }
+    const std::u32string word = s.text.substr(b, cursor - b);
+    const bool ascii = std::all_of(word.begin(), word.end(), [](char32_t c) { return c < 0x80; });
+    if (ascii && config_.telex.english != nullptr) {
+        std::string lower = u32_to_utf8(word);
+        for (char& c : lower) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        if (config_.telex.english->contains(lower)) {
+            return;  // từ tiếng Anh: không nhặt lại (test + s -> tests)
+        }
+    }
+    if (composer_.attach(word)) {
+        recent_.clear();
+        inflight_.reset();
+        log("reattach len=" + std::to_string(word.size()));
+    }
 }
 
 void Engine::note_shown(const std::u32string& old, const std::u32string& now) {

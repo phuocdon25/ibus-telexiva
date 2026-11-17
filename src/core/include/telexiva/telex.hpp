@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -44,5 +45,9 @@ struct TelexOptions {
 // Chữ cuối cùng khi kết thúc từ (kiểm tra chặt; sai chính tả thì trả lại nguyên
 // chuỗi phím, ví dụ "text" -> "text").
 [[nodiscard]] std::string finalize(std::string_view keys, const TelexOptions& options = {});
+
+// Suy ngược chuỗi phím Telex cho một chữ đã có (việt -> "vieejt", Đường -> "Dduwowngf"),
+// để "nhặt lại" từ đã gõ khi người dùng quay lại sửa. nullopt nếu chữ có ký tự lạ.
+[[nodiscard]] std::optional<std::string> keys_for(std::u32string_view word);
 
 }  // namespace telexiva

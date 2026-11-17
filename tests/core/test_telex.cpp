@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "telexiva/composer.hpp"
 #include "telexiva/telex.hpp"
 
 namespace {
@@ -73,4 +74,15 @@ TEST_CASE("Chuỗi rỗng và ký tự lạ không làm hỏng engine", "[telex]
     CHECK(telexiva::finalize("").empty());
     CHECK(telexiva::finalize("[[") == "[");
     CHECK(telexiva::finalize("}") == "Ư");
+}
+
+TEST_CASE("keys_for: suy ngược chuỗi phím rồi tái tạo đúng chữ", "[telex]") {
+    CHECK(telexiva::keys_for(U"việt") == std::optional<std::string>("vieetj"));  // dấu thanh gõ cuối
+    CHECK(telexiva::keys_for(U"Đường") == std::optional<std::string>("Dduwowngf"));
+    for (const std::u32string w : {U"người", U"Quốc", U"được", U"khuyến", U"thuở", U"ĐÂY", U"class"}) {
+        const auto keys = telexiva::keys_for(w);
+        REQUIRE(keys.has_value());
+        CHECK(telexiva::utf8_to_u32(telexiva::transform(*keys)) == w);
+    }
+    CHECK_FALSE(telexiva::keys_for(U"a1").has_value());
 }

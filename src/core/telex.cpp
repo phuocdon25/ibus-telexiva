@@ -63,6 +63,7 @@ struct Tables {
     std::unordered_map<char32_t, char32_t> base;  // ă/â -> a, ê -> e, ô/ơ -> o, ư -> u
     std::unordered_set<char32_t> horn_diacritics;
     std::unordered_map<char32_t, char32_t> upper;
+    std::unordered_map<char32_t, char32_t> lower;  // ngược của upper
     std::vector<u32> initials;  // dài trước, ngắn sau
     U32Set finals, final_prefixes, stop_finals;
     U32Set nuclei, open_only, nucleus_base_prefixes, closable_bases, nucleus_prefixes;
@@ -98,6 +99,9 @@ const Tables& tables() {
             }
         }
         t.upper[U'đ'] = U'Đ';
+        for (const auto& [lo, up] : t.upper) {
+            t.lower[up] = lo;
+        }
         t.base = {{U'ă', U'a'}, {U'â', U'a'}, {U'ê', U'e'}, {U'ô', U'o'}, {U'ơ', U'o'}, {U'ư', U'u'}};
         t.horn_diacritics = {U'â', U'ă', U'ê', U'ô', U'ơ', U'ư'};
 
@@ -697,6 +701,61 @@ bool WordSet::contains(std::string_view word) const { return words_.count(std::s
 
 std::string transform(std::string_view keys, const TelexOptions& options) {
     return render(keys, /*strict=*/false, options);
+}
+
+std::optional<std::string> keys_for(std::u32string_view word) {
+    const Tables& t = tables();
+    std::string keys;
+    int tone = 0;
+    for (char32_t c : word) {
+        bool up = false;
+        if (auto it = t.lower.find(c); it != t.lower.end()) {
+            c = it->second;
+            up = true;
+        } else if (c < 0x80 && std::isupper(static_cast<int>(c))) {
+            c = static_cast<char32_t>(std::tolower(static_cast<int>(c)));
+            up = true;
+        }
+        // Tách dấu thanh: tìm dạng gốc của nguyên âm.
+        char32_t base = c;
+        for (const auto& [b, forms] : t.toned) {
+            const auto pos = forms.find(c);
+            if (pos != u32::npos) {
+                base = b;
+                if (pos > 0) {
+                    if (tone != 0) {
+                        return std::nullopt;  // hai dấu thanh trong một từ
+                    }
+                    tone = static_cast<int>(pos);
+                }
+                break;
+            }
+        }
+        std::string k;
+        switch (base) {
+            case U'ă': k = "aw"; break;
+            case U'â': k = "aa"; break;
+            case U'ê': k = "ee"; break;
+            case U'ô': k = "oo"; break;
+            case U'ơ': k = "ow"; break;
+            case U'ư': k = "uw"; break;
+            case U'đ': k = "dd"; break;
+            default:
+                if (base < 0x80 && std::isalpha(static_cast<int>(base))) {
+                    k = std::string(1, static_cast<char>(base));
+                } else {
+                    return std::nullopt;  // không phải chữ cái tiếng Việt
+                }
+        }
+        if (up) {
+            k[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(k[0])));
+        }
+        keys += k;
+    }
+    if (tone != 0) {
+        keys.push_back("?sfrxj"[tone]);
+    }
+    return keys;
 }
 
 std::string finalize(std::string_view keys, const TelexOptions& options) {

@@ -132,6 +132,20 @@ WordEndResult Composer::word_end(char32_t ch) {
     return r;
 }
 
+bool Composer::attach(const std::u32string& word) {
+    if (word.empty()) {
+        return false;
+    }
+    const auto keys = keys_for(word);
+    if (!keys || utf8_to_u32(transform(*keys, options_)) != word) {
+        return false;
+    }
+    raw_ = *keys;
+    shown_ = word;
+    frozen_ = false;
+    return true;
+}
+
 void Composer::reset() {
     raw_.clear();
     shown_.clear();

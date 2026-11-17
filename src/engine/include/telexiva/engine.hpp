@@ -101,6 +101,7 @@ private:
     void wait_confirm();
     void check_pending_verify();
     void note_shown(const std::u32string& old, const std::u32string& now);
+    void try_reattach();
     void reset_word(const char* why);
 
     bool process_preedit(const Key& key);

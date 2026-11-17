@@ -101,6 +101,14 @@ struct Session {
             const bool letter = std::isalpha(static_cast<unsigned char>(c)) != 0 || c == '[' || c == ']' ||
                                 c == '{' || c == '}';
             k.kind = letter ? Key::Kind::Letter : Key::Kind::Printable;
+            if (c == '\b') {  // Backspace
+                k.kind = Key::Kind::Backspace;
+                k.ch = 0;
+                if (!engine.process_key(k) && !host.buf.empty()) {
+                    host.buf.pop_back();  // ứng dụng tự xóa ký tự trước con trỏ
+                }
+                continue;
+            }
             const std::size_t logs_before = host.logs.size();
             if (!engine.process_key(k)) {
                 host.sel.clear();
@@ -149,7 +157,8 @@ TEST_CASE("Engine: trang tự đổi nội dung thì không xóa nhầm", "[engi
     s.type("Quee");
     s.host.buf = U"Quên chấm công";
     s.type("s");
-    CHECK(s.text() == "Quên chấm côngs");
+    // Không xóa nhầm nội dung trang; phím dấu ngay sau từ "công" sửa dấu từ đó (nhặt lại từ).
+    CHECK(s.text() == "Quên chấm cống");
     CHECK_FALSE(s.engine.preedit_mode());
 }
 
@@ -230,4 +239,24 @@ TEST_CASE("Engine: log không chứa nội dung người dùng gõ (NFR-004)", "
         CHECK(line.find("mật") == std::string::npos);
         CHECK(line.find("bimaat") == std::string::npos);
     }
+}
+
+TEST_CASE("Engine: Backspace rồi đổi dấu trong lúc gõ", "[engine][edit]") {
+    CHECK(Session{}.type("vieejt\bst ").text() == "viết ");   // việt -> việ -> viế -> viết
+    CHECK(Session{}.type("hocj\b\bas ").text() == "há ");    // học -> họ -> h -> há
+}
+
+TEST_CASE("Engine: quay lại sửa dấu một từ đã gõ xong", "[engine][edit]") {
+    CHECK(Session{}.type("hocj \bs ").text() == "hóc ");       // học, Space, Backspace, s -> hóc
+    CHECK(Session{}.type("Vieejt \bs ").text() == "Viết ");
+    CHECK(Session{}.type("nha \bf ").text() == "nhà ");        // từ không dấu vẫn nhặt lại được
+}
+
+TEST_CASE("Engine: không nhặt lại từ tiếng Anh", "[engine][edit]") {
+    static WordSet words;
+    words.insert("ban");
+    EngineConfig cfg;
+    cfg.telex.english = &words;
+    CHECK(Session{cfg}.type("ban \bs ").text() == "bans ");   // không thành "bán"
+    CHECK(Session{}.type("ban \bs ").text() == "bán ");       // không có từ điển: nhặt lại
 }
