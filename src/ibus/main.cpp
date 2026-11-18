@@ -92,7 +92,6 @@ const telexiva::MacroTable& macros() {
 //   tone = old | new          (kiểu đặt dấu)
 //   strategy = auto | s1 | s2 (ép cách sửa chữ, để thử nghiệm)
 //   guard = on | off
-//   toggle = ctrl+shift | none   (phím tắt chuyển Việt/Anh)
 //   escape = restore | off       (Esc khi đang gõ: khôi phục chuỗi phím gốc)
 //   macros = on | off            (gõ tắt từ ~/.config/telexiva/macros.txt)
 telexiva::EngineConfig load_config() {
@@ -122,8 +121,6 @@ telexiva::EngineConfig load_config() {
                                            : telexiva::Strategy::Auto;
         } else if (key == "guard") {
             cfg.guard = value != "off";
-        } else if (key == "toggle") {
-            cfg.toggle_ctrl_shift = value != "none" && value != "off";
         } else if (key == "escape") {
             cfg.escape_restores_raw = value != "off";
         } else if (key == "macros") {
@@ -139,26 +136,7 @@ telexiva::EngineConfig load_config() {
 
 class IBusHost : public telexiva::Host {
 public:
-    explicit IBusHost(IBusEngine* engine) : engine_(engine) {
-        // Thuộc tính "InputMode": GNOME Shell hiện ký hiệu của nó trên thanh trạng thái
-        // (V = tiếng Việt, E = English) và trong menu bộ gõ; bấm vào để chuyển chế độ.
-        mode_prop_ = ibus_property_new("InputMode", PROP_TYPE_NORMAL, nullptr, nullptr, nullptr, TRUE, TRUE,
-                                       PROP_STATE_UNCHECKED, nullptr);
-        g_object_ref_sink(mode_prop_);
-        props_ = ibus_prop_list_new();
-        g_object_ref_sink(props_);
-        ibus_prop_list_append(props_, mode_prop_);
-        set_mode_labels(true);
-    }
-    ~IBusHost() override {
-        g_object_unref(props_);
-        g_object_unref(mode_prop_);
-    }
-    void register_properties() { ibus_engine_register_properties(engine_, props_); }
-    void mode_changed(bool vietnamese) override {
-        set_mode_labels(vietnamese);
-        ibus_engine_update_property(engine_, mode_prop_);
-    }
+    explicit IBusHost(IBusEngine* engine) : engine_(engine) {}
 
     void commit(const std::string& utf8) override {
         ibus_engine_commit_text(engine_, ibus_text_new_from_string(utf8.c_str()));
@@ -201,16 +179,7 @@ public:
     void log(const std::string& line) override { file_log().write(line); }
 
 private:
-    void set_mode_labels(bool vietnamese) {
-        ibus_property_set_label(mode_prop_, ibus_text_new_from_static_string(
-                                                vietnamese ? "Tiếng Việt (Ctrl+Shift để đổi)" : "English (Ctrl+Shift để đổi)"));
-        ibus_property_set_symbol(mode_prop_, ibus_text_new_from_static_string(vietnamese ? "V" : "E"));
-        ibus_property_set_tooltip(mode_prop_, ibus_text_new_from_static_string("Chuyển Tiếng Việt / English"));
-    }
-
     IBusEngine* engine_;
-    IBusProperty* mode_prop_ = nullptr;
-    IBusPropList* props_ = nullptr;
 };
 
 telexiva::Purpose to_purpose(guint purpose) {
@@ -307,7 +276,6 @@ static gboolean telexiva_engine_process_key_event(IBusEngine* engine, guint keyv
 
 static void telexiva_engine_focus_in(IBusEngine* engine) {
     TelexivaEngine* self = TELEXIVA_ENGINE(engine);
-    self->host->register_properties();
     // IBus chỉ gửi surrounding text khi engine đã hỏi ít nhất một lần.
     ibus_engine_get_surrounding_text(engine, nullptr, nullptr, nullptr);
     self->impl->focus_in("?");
@@ -315,7 +283,6 @@ static void telexiva_engine_focus_in(IBusEngine* engine) {
 
 static void telexiva_engine_focus_in_id(IBusEngine* engine, const gchar* /*object_path*/, const gchar* client) {
     TelexivaEngine* self = TELEXIVA_ENGINE(engine);
-    self->host->register_properties();
     ibus_engine_get_surrounding_text(engine, nullptr, nullptr, nullptr);
     self->impl->focus_in(client != nullptr ? client : "-");
 }
@@ -329,14 +296,7 @@ static void telexiva_engine_focus_out_id(IBusEngine* engine, const gchar* /*obje
 static void telexiva_engine_reset(IBusEngine* engine) { TELEXIVA_ENGINE(engine)->impl->reset(); }
 
 static void telexiva_engine_enable(IBusEngine* engine) {
-    TELEXIVA_ENGINE(engine)->host->register_properties();
     ibus_engine_get_surrounding_text(engine, nullptr, nullptr, nullptr);
-}
-
-static void telexiva_engine_property_activate(IBusEngine* engine, const gchar* name, guint /*state*/) {
-    if (g_strcmp0(name, "InputMode") == 0) {
-        TELEXIVA_ENGINE(engine)->impl->toggle_mode();  // bấm vào biểu tượng V/E
-    }
 }
 
 static void telexiva_engine_set_capabilities(IBusEngine* engine, guint caps) {
@@ -366,7 +326,6 @@ static void telexiva_engine_class_init(TelexivaEngineClass* klass) {
     e->set_capabilities = telexiva_engine_set_capabilities;
     e->set_content_type = telexiva_engine_set_content_type;
     e->set_surrounding_text = telexiva_engine_set_surrounding_text;
-    e->property_activate = telexiva_engine_property_activate;
 }
 
 // ---------------------------------------------------------------------------

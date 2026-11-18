@@ -28,13 +28,13 @@ Giới hạn đã biết: từ tiếng Anh trùng với âm tiết tiếng Việ
 
 | Tính năng | Cách dùng |
 |---|---|
-| Chuyển Tiếng Việt / English | Nhấn rồi thả **Ctrl+Shift** (không kèm phím khác), hoặc bấm biểu tượng **V/E** trên thanh trạng thái |
+| Chuyển Tiếng Việt / English | Dùng **Super+Space** của GNOME (giữa Telexiva và bàn phím English) |
 | Khôi phục khi gõ nhầm | Đang gõ mà engine đoán sai (`tes` → `té`): bấm **Esc** để về đúng phím đã gõ |
 | Sửa dấu từ đã gõ | Backspace rồi gõ phím dấu; hoặc đưa con trỏ ra sau / vào giữa từ rồi gõ phím dấu (`hoa|ng` + `f` → `hoàng`) |
 | Gõ tắt | Tạo `~/.config/telexiva/macros.txt` (mẫu: [data/macros.example.txt](data/macros.example.txt)), ví dụ `ko = không` |
 | Viết tắt kỹ thuật | `AWS`, `OS`, `REST`, `CORS` gõ IN HOA được giữ nguyên |
 
-Tùy chọn trong `~/.config/telexiva.conf`: `tone = new`, `toggle = none`, `escape = off`, `macros = off`. Sau khi sửa file, chạy `ibus restart`.
+Tùy chọn trong `~/.config/telexiva.conf`: `tone = new`, `escape = off`, `macros = off`. Sau khi sửa file, chạy `ibus restart`.
 
 ## Cài thử prototype
 

@@ -249,7 +249,7 @@ Có hai tầng chuyển đổi, cần phân biệt rõ:
   - Mặc định **`Ctrl+Shift`** (nhấn rồi thả, không kèm phím khác). Tùy chọn khác: `Alt+Z`.
   - Chỉ kích hoạt khi `Ctrl+Shift` được nhấn và thả **mà không có phím nào khác xen giữa**, để không xung đột với các tổ hợp `Ctrl+Shift+<phím>` của VS Code.
   - Hiển thị trạng thái V/E trên indicator input source ở top bar của GNOME (qua IBus property). Cần kiểm chứng cơ chế hiển thị.
-  - Trạng thái 0.4.0: **chưa có trong prototype**; hiện chuyển bằng `Super+Space` giữa Telexiva và bàn phím English. Làm ở Phase 2.
+  - **Quyết định 2026-11-18: bỏ phím tắt riêng.** Người dùng chuyển Việt/Anh bằng `Super+Space` của GNOME (giữa Telexiva và bàn phím English) và thấy `Ctrl+Shift` thừa; không có chế độ English bên trong Telexiva, không có biểu tượng V/E.
 
 ### FR-005: Composition — P0
 

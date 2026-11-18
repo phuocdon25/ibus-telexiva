@@ -34,7 +34,7 @@ Nhiều thứ tự gõ (`dudocwj`, `tiengse`, `chuaw`…), 38.264 chuỗi từ V
 - ✅ Số đi thẳng (BUG-001), URL/email/biến (`foo_bar`, `test@x.com`).
 - ✅ **Mới:** từ viết tắt IN HOA (`AWS`, `OS`, `REST`, `CORS`, `UX`…): 26 từ trước đây bị đổi nhầm.
 - ✅ **Mới:** Esc khôi phục chuỗi gốc khi đoán sai.
-- ✅ **Mới:** Ctrl+Shift chuyển Việt/Anh, không mất nội dung đang soạn.
+- ✅ Chuyển Việt/Anh bằng **Super+Space** của GNOME. Không làm phím tắt riêng trong Telexiva (người dùng thấy thừa, đã bỏ).
 - ➖ Ngoại lệ theo ứng dụng: GNOME Wayland không cho biết ứng dụng (FR-010).
 
 ## 6. Composition — ✅ (IBus)
@@ -48,7 +48,7 @@ Context độc lập; không commit trùng (guard + kiểm tra sau khi sửa); E
 ## 8. UX & hiệu năng — 🟡
 
 - ✅ ~0,5 µs/phím (core), không ghi nội dung gõ.
-- ✅ **Mới:** biểu tượng **V/E** trên thanh trạng thái GNOME + bấm để chuyển.
+- ✅ GNOME đã hiện bộ gõ đang dùng trên thanh trạng thái; không cần biểu tượng V/E riêng.
 - ✅ **Mới:** gõ tắt (`ko` → `không`) từ `~/.config/telexiva/macros.txt`.
 - ❌ Ghi nhớ cấu hình theo ứng dụng (không biết ứng dụng trên Wayland).
 

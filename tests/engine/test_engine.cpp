@@ -18,7 +18,6 @@ struct FakeHost : Host {
     std::u32string buf;         // nội dung thật trước con trỏ
     std::u32string sel;         // vùng chọn sau con trỏ (gợi ý tự điền của thanh địa chỉ)
     std::u32string after;       // chữ sau con trỏ, không chọn (sửa giữa từ)
-    bool mode_vi = true;
     std::u32string view;        // bản sao của Mutter (khi stale_mode)
     bool stale_mode = false;    // engine thấy `view` thay vì `buf`; Mutter đổi ký tự -> byte bằng view
     bool ignore_delete = false; // ô kiểu ChatGPT: bỏ qua lệnh xóa
@@ -75,7 +74,6 @@ struct FakeHost : Host {
     }
     double now_ms() override { return t; }
     void log(const std::string& line) override { logs.push_back(line); }
-    void mode_changed(bool vietnamese) override { mode_vi = vietnamese; }
 
     [[nodiscard]] std::string text() const { return u32_to_utf8(buf + after); }
 };
@@ -135,22 +133,6 @@ struct Session {
     }
     [[nodiscard]] std::string text() const { return host.text(); }
 
-    // Phím bổ trợ (Ctrl/Shift) để thử phím tắt chuyển chế độ.
-    bool key(std::uint32_t keyval, std::uint32_t state, bool release, Key::Kind kind = Key::Kind::Modifier) {
-        Key k;
-        k.kind = kind;
-        k.keyval = keyval;
-        k.state = state | (release ? (1u << 30) : 0u);
-        k.release = release;
-        k.shortcut = kind != Key::Kind::Modifier && (state & 4u) != 0;
-        return engine.process_key(k);
-    }
-    void ctrl_shift() {
-        key(0xffe3, 0, false);       // Ctrl xuống
-        key(0xffe1, 4, false);       // Shift xuống (đang giữ Ctrl)
-        key(0xffe1, 4 | 1, true);    // Shift lên
-        key(0xffe3, 4, true);        // Ctrl lên
-    }
     bool escape() {
         Key k;
         k.kind = Key::Kind::Escape;
@@ -288,29 +270,6 @@ TEST_CASE("Engine: không nhặt lại từ tiếng Anh", "[engine][edit]") {
     cfg.telex.english = &words;
     CHECK(Session{cfg}.type("ban \bs ").text() == "bans ");   // không thành "bán"
     CHECK(Session{}.type("ban \bs ").text() == "bán ");       // không có từ điển: nhặt lại
-}
-
-TEST_CASE("Engine: Ctrl+Shift chuyển Việt/Anh (FR-004)", "[engine][mode]") {
-    Session s;
-    s.ctrl_shift();
-    CHECK_FALSE(s.engine.vietnamese());
-    CHECK_FALSE(s.host.mode_vi);
-    s.type("vieejt ");
-    CHECK(s.text() == "vieejt ");  // English: đi thẳng
-    s.ctrl_shift();
-    CHECK(s.engine.vietnamese());
-    s.type("vieejt ");
-    CHECK(s.text() == "vieejt việt ");
-}
-
-TEST_CASE("Engine: Ctrl+Shift+P (VS Code) không chuyển chế độ", "[engine][mode]") {
-    Session s;
-    s.key(0xffe3, 0, false);
-    s.key(0xffe1, 4, false);
-    s.key('P', 4 | 1, false, Key::Kind::Letter);  // có phím khác xen giữa
-    s.key(0xffe1, 4 | 1, true);
-    s.key(0xffe3, 4, true);
-    CHECK(s.engine.vietnamese());
 }
 
 TEST_CASE("Engine: Esc khôi phục chuỗi phím gốc khi đoán sai", "[engine][restore]") {

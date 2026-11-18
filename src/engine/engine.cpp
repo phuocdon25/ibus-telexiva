@@ -63,68 +63,7 @@ Engine::Engine(Host& host, EngineConfig config)
     composer_.set_macros(config.macros);
 }
 
-void Engine::set_vietnamese(bool on) {
-    if (on == vietnamese_) {
-        return;
-    }
-    if (!preedit_raw_.empty()) {
-        commit_preedit(true);
-    }
-    reset_word("mode_change");
-    vietnamese_ = on;
-    log(on ? "mode vietnamese" : "mode english");
-    host_.mode_changed(on);
-}
-
-bool Engine::track_toggle_hotkey(const Key& key) {
-    // Nhấn rồi thả Ctrl+Shift, không có phím nào khác xen giữa (Ctrl+Shift+P của VS Code
-    // không kích hoạt). Trả về true khi vừa chuyển chế độ.
-    constexpr std::uint32_t kShiftL = 0xffe1, kShiftR = 0xffe2, kCtrlL = 0xffe3, kCtrlR = 0xffe4;
-    constexpr std::uint32_t kShiftMask = 1u << 0, kControlMask = 1u << 2;
-    if (!config_.toggle_ctrl_shift) {
-        return false;
-    }
-    const bool is_shift = key.keyval == kShiftL || key.keyval == kShiftR;
-    const bool is_ctrl = key.keyval == kCtrlL || key.keyval == kCtrlR;
-    if (!key.release) {
-        if ((is_shift && (key.state & kControlMask) != 0) || (is_ctrl && (key.state & kShiftMask) != 0)) {
-            toggle_armed_ = true;
-        } else if (!is_shift && !is_ctrl) {
-            toggle_armed_ = false;  // có phím khác xen giữa
-        }
-        return false;
-    }
-    if (toggle_armed_ && (is_shift || is_ctrl)) {
-        toggle_armed_ = false;
-        toggle_mode();
-        return true;
-    }
-    return false;
-}
-
-void Engine::log(const std::string& line) { host_.log("[" + client_ + "] " + line); }
-
-Strategy Engine::effective_strategy() const {
-    if (config_.strategy != Strategy::Auto) {
-        return config_.strategy;
-    }
-    if (preedit_mode_) {
-        return Strategy::Preedit;
-    }
-    if (purpose_ == Purpose::Terminal) {
-        return Strategy::ForwardKeys;
-    }
-    return has_surrounding_ ? Strategy::Surrounding : Strategy::ForwardKeys;
-}
-
-// ---------------------------------------------------------------------------
-// Phím
-// ---------------------------------------------------------------------------
-
 bool Engine::process_key(const Key& key) {
-    if (track_toggle_hotkey(key)) {
-        return false;  // để ứng dụng vẫn nhận sự kiện thả phím Ctrl/Shift
-    }
     if (waiting_) {
         // Phím đến trong lúc đang đợi xác nhận: giữ lại, xử lý sau đúng thứ tự.
         if (key.release) {
@@ -162,9 +101,6 @@ bool Engine::handle(const Key& key) {
     }
     if (purpose_ == Purpose::Password || purpose_ == Purpose::Pin) {
         return false;  // FR-011
-    }
-    if (!vietnamese_) {
-        return false;  // chế độ English: mọi phím đi thẳng (FR-003)
     }
     if (key.shortcut) {
         if (preedit_mode_ && !preedit_raw_.empty()) {
