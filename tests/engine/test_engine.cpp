@@ -17,6 +17,8 @@ namespace {
 struct FakeHost : Host {
     std::u32string buf;         // nội dung thật trước con trỏ
     std::u32string sel;         // vùng chọn sau con trỏ (gợi ý tự điền của thanh địa chỉ)
+    std::u32string after;       // chữ sau con trỏ, không chọn (sửa giữa từ)
+    bool mode_vi = true;
     std::u32string view;        // bản sao của Mutter (khi stale_mode)
     bool stale_mode = false;    // engine thấy `view` thay vì `buf`; Mutter đổi ký tự -> byte bằng view
     bool ignore_delete = false; // ô kiểu ChatGPT: bỏ qua lệnh xóa
@@ -50,15 +52,19 @@ struct FakeHost : Host {
             buf = utf8_to_u32(raw);
             return;
         }
-        const std::size_t n = static_cast<std::size_t>(-offset) + static_cast<std::size_t>(delete_extra);
+        const std::size_t before = static_cast<std::size_t>(-offset);
+        const std::size_t n = before + static_cast<std::size_t>(delete_extra);
         buf.resize(buf.size() - std::min(n, buf.size()));
+        if (nchars > before) {
+            after.erase(0, std::min<std::size_t>(nchars - before, after.size()));
+        }
     }
     Surrounding surrounding() override {
         if (stale_mode) {
             return {view, static_cast<std::uint32_t>(view.size()), static_cast<std::uint32_t>(view.size())};
         }
-        const std::u32string all = buf + sel;
-        return {all, static_cast<std::uint32_t>(buf.size()), static_cast<std::uint32_t>(all.size())};
+        const std::u32string all = buf + sel + after;
+        return {all, static_cast<std::uint32_t>(buf.size()), static_cast<std::uint32_t>(buf.size() + sel.size())};
     }
     void forward_key(std::uint32_t, std::uint32_t, std::uint32_t) override {}  // Wayland: không tới app
     void update_preedit(const std::string& utf8) override { preedit = utf8; }
@@ -69,8 +75,9 @@ struct FakeHost : Host {
     }
     double now_ms() override { return t; }
     void log(const std::string& line) override { logs.push_back(line); }
+    void mode_changed(bool vietnamese) override { mode_vi = vietnamese; }
 
-    [[nodiscard]] std::string text() const { return u32_to_utf8(buf); }
+    [[nodiscard]] std::string text() const { return u32_to_utf8(buf + after); }
 };
 
 struct Session {
@@ -127,6 +134,28 @@ struct Session {
         return *this;
     }
     [[nodiscard]] std::string text() const { return host.text(); }
+
+    // Phím bổ trợ (Ctrl/Shift) để thử phím tắt chuyển chế độ.
+    bool key(std::uint32_t keyval, std::uint32_t state, bool release, Key::Kind kind = Key::Kind::Modifier) {
+        Key k;
+        k.kind = kind;
+        k.keyval = keyval;
+        k.state = state | (release ? (1u << 30) : 0u);
+        k.release = release;
+        k.shortcut = kind != Key::Kind::Modifier && (state & 4u) != 0;
+        return engine.process_key(k);
+    }
+    void ctrl_shift() {
+        key(0xffe3, 0, false);       // Ctrl xuống
+        key(0xffe1, 4, false);       // Shift xuống (đang giữ Ctrl)
+        key(0xffe1, 4 | 1, true);    // Shift lên
+        key(0xffe3, 4, true);        // Ctrl lên
+    }
+    bool escape() {
+        Key k;
+        k.kind = Key::Kind::Escape;
+        return engine.process_key(k);
+    }
 };
 
 
@@ -259,4 +288,68 @@ TEST_CASE("Engine: không nhặt lại từ tiếng Anh", "[engine][edit]") {
     cfg.telex.english = &words;
     CHECK(Session{cfg}.type("ban \bs ").text() == "bans ");   // không thành "bán"
     CHECK(Session{}.type("ban \bs ").text() == "bán ");       // không có từ điển: nhặt lại
+}
+
+TEST_CASE("Engine: Ctrl+Shift chuyển Việt/Anh (FR-004)", "[engine][mode]") {
+    Session s;
+    s.ctrl_shift();
+    CHECK_FALSE(s.engine.vietnamese());
+    CHECK_FALSE(s.host.mode_vi);
+    s.type("vieejt ");
+    CHECK(s.text() == "vieejt ");  // English: đi thẳng
+    s.ctrl_shift();
+    CHECK(s.engine.vietnamese());
+    s.type("vieejt ");
+    CHECK(s.text() == "vieejt việt ");
+}
+
+TEST_CASE("Engine: Ctrl+Shift+P (VS Code) không chuyển chế độ", "[engine][mode]") {
+    Session s;
+    s.key(0xffe3, 0, false);
+    s.key(0xffe1, 4, false);
+    s.key('P', 4 | 1, false, Key::Kind::Letter);  // có phím khác xen giữa
+    s.key(0xffe1, 4 | 1, true);
+    s.key(0xffe3, 4, true);
+    CHECK(s.engine.vietnamese());
+}
+
+TEST_CASE("Engine: Esc khôi phục chuỗi phím gốc khi đoán sai", "[engine][restore]") {
+    Session s;
+    s.type("tes");                 // tes -> té
+    CHECK(s.text() == "té");
+    CHECK(s.escape());             // Esc được dùng để khôi phục
+    CHECK(s.text() == "tes");
+    s.type("t ");                  // phần còn lại của từ giữ nguyên
+    CHECK(s.text() == "test ");
+    CHECK_FALSE(Session{}.escape());  // không có từ đang gõ: Esc đi thẳng (đóng hộp thoại…)
+}
+
+TEST_CASE("Engine: sửa dấu thanh khi con trỏ ở giữa từ", "[engine][edit]") {
+    Session s;
+    s.host.buf = U"hoa";
+    s.host.after = U"ng nhé";
+    s.engine.focus_in("test");
+    s.type("f");
+    CHECK(s.text() == "hoàng nhé");
+    Session t;
+    t.host.buf = U"hoa";
+    t.host.after = U"ng";
+    t.engine.focus_in("test");
+    t.type("n");                   // chữ thường giữa từ: chèn như bình thường
+    CHECK(t.text() == "hoanng");
+}
+
+TEST_CASE("Engine: gõ tắt (FR-012)", "[engine][macro]") {
+    static MacroTable macros;
+    macros.add("ko", U"không");
+    macros.add("vn", U"Việt Nam");
+    EngineConfig cfg;
+    cfg.macros = &macros;
+    CHECK(Session{cfg}.type("ko bt, vn. ").text() == "không bt, Việt Nam. ");
+    CHECK(Session{cfg}.type("Ko KO ").text() == "Không KHÔNG ");
+    CHECK(Session{cfg}.type("foo_ko kon ").text() == "foo_ko kon ");  // code, từ khác: không đổi
+}
+
+TEST_CASE("Engine: từ viết tắt IN HOA giữ nguyên", "[engine]") {
+    CHECK(Session{}.type("AWS OS REST CORS UX API os ").text() == "AWS OS REST CORS UX API ó ");
 }

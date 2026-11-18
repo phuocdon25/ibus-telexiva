@@ -41,6 +41,9 @@ class TelexFinal(unittest.TestCase):
         # số nhiều tiếng Anh sau dấu sắc (s s): không được mất chữ s
         ("tests", "tests"), ("lists", "lists"), ("posts", "posts"), ("costs", "costs"),
         ("hosts", "hosts"), ("ass", "as"),
+        # từ viết tắt IN HOA
+        ("AWS", "AWS"), ("OS", "OS"), ("REST", "REST"), ("CORS", "CORS"), ("UX", "UX"),
+        ("API", "API"), ("JSON", "JSON"), ("os", "ó"), ("Os", "Ó"),
         # không biến đổi
         ("lo", "lo"), ("Q", "Q"), ("localhost", "localhost"),
     ]

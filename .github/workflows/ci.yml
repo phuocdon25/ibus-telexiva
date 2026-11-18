@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cài công cụ
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config catch2 libibus-1.0-dev libglib2.0-dev \
+            python3 python3-gi gir1.2-ibus-1.0 wamerican
+      - name: Test prototype (Python)
+        run: python3 -m unittest discover -s prototype -v
+      - name: Build + test (debug, ASan/UBSan)
+        run: |
+          cmake --preset debug
+          cmake --build --preset debug
+          ctest --preset debug -LE slow
+      - name: Build release + parity C++ ↔ Python
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+          python3 tests/parity/parity_check.py build/release/telexiva-telex

@@ -329,7 +329,14 @@ def _tone_index(nucleus: str, has_final: bool, new_style: bool) -> int:
     return 0
 
 
+# Từ viết tắt kỹ thuật hay gõ IN HOA mà quy tắc Telex sẽ biến đổi nhầm (AWS -> Ắ, OS -> Ó,
+# REST -> RÉT). Chỉ áp dụng khi gõ toàn chữ hoa; "os" viết thường vẫn là tiếng Việt.
+ACRONYMS = {"ajax", "asap", "asus", "aws", "coo", "cors", "ddd", "ddos", "dos", "ecs", "gif", "nas", "oop", "orm", "os", "paas", "pos", "pwa", "rar", "rest", "saas", "sos", "tar", "uri", "ux", "waf"}
+
+
 def _render(keys: str, strict: bool, new_style: bool) -> str:
+    if len(keys) >= 2 and keys.isalpha() and keys.isupper() and keys.lower() in ACRONYMS:
+        return keys
     chars, tone, undo_idx = _apply_keys(keys)
     # Chuẩn hóa cặp u/o có móc để thứ tự đặt w không quan trọng:
     # - còn chữ phía sau -> "ươ" (được, người, mượn…)

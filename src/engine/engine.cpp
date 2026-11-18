@@ -59,7 +59,48 @@ const char* strategy_name(Strategy s) {
 }  // namespace
 
 Engine::Engine(Host& host, EngineConfig config)
-    : host_(host), config_(config), composer_(config.telex) {}
+    : host_(host), config_(config), composer_(config.telex) {
+    composer_.set_macros(config.macros);
+}
+
+void Engine::set_vietnamese(bool on) {
+    if (on == vietnamese_) {
+        return;
+    }
+    if (!preedit_raw_.empty()) {
+        commit_preedit(true);
+    }
+    reset_word("mode_change");
+    vietnamese_ = on;
+    log(on ? "mode vietnamese" : "mode english");
+    host_.mode_changed(on);
+}
+
+bool Engine::track_toggle_hotkey(const Key& key) {
+    // Nhấn rồi thả Ctrl+Shift, không có phím nào khác xen giữa (Ctrl+Shift+P của VS Code
+    // không kích hoạt). Trả về true khi vừa chuyển chế độ.
+    constexpr std::uint32_t kShiftL = 0xffe1, kShiftR = 0xffe2, kCtrlL = 0xffe3, kCtrlR = 0xffe4;
+    constexpr std::uint32_t kShiftMask = 1u << 0, kControlMask = 1u << 2;
+    if (!config_.toggle_ctrl_shift) {
+        return false;
+    }
+    const bool is_shift = key.keyval == kShiftL || key.keyval == kShiftR;
+    const bool is_ctrl = key.keyval == kCtrlL || key.keyval == kCtrlR;
+    if (!key.release) {
+        if ((is_shift && (key.state & kControlMask) != 0) || (is_ctrl && (key.state & kShiftMask) != 0)) {
+            toggle_armed_ = true;
+        } else if (!is_shift && !is_ctrl) {
+            toggle_armed_ = false;  // có phím khác xen giữa
+        }
+        return false;
+    }
+    if (toggle_armed_ && (is_shift || is_ctrl)) {
+        toggle_armed_ = false;
+        toggle_mode();
+        return true;
+    }
+    return false;
+}
 
 void Engine::log(const std::string& line) { host_.log("[" + client_ + "] " + line); }
 
@@ -81,6 +122,9 @@ Strategy Engine::effective_strategy() const {
 // ---------------------------------------------------------------------------
 
 bool Engine::process_key(const Key& key) {
+    if (track_toggle_hotkey(key)) {
+        return false;  // để ứng dụng vẫn nhận sự kiện thả phím Ctrl/Shift
+    }
     if (waiting_) {
         // Phím đến trong lúc đang đợi xác nhận: giữ lại, xử lý sau đúng thứ tự.
         if (key.release) {
@@ -119,6 +163,9 @@ bool Engine::handle(const Key& key) {
     if (purpose_ == Purpose::Password || purpose_ == Purpose::Pin) {
         return false;  // FR-011
     }
+    if (!vietnamese_) {
+        return false;  // chế độ English: mọi phím đi thẳng (FR-003)
+    }
     if (key.shortcut) {
         if (preedit_mode_ && !preedit_raw_.empty()) {
             commit_preedit(true);
@@ -145,6 +192,17 @@ bool Engine::handle(const Key& key) {
     }
 
     if (!is_letter) {
+        if (key.kind == Key::Kind::Escape && config_.escape_restores_raw && !composer_.raw().empty() &&
+            !composer_.frozen()) {
+            // Esc khi đang gõ: engine đoán sai -> khôi phục chuỗi phím gốc (tét -> tes).
+            const std::u32string old = composer_.shown();
+            const EditAction a = composer_.restore_raw();
+            if (a.kind == EditAction::Kind::Replace && apply_edit(old, a)) {
+                log("escape -> restore raw");
+                return true;  // nuốt Esc: lần bấm này dùng để khôi phục, không đóng hộp thoại
+            }
+            return false;
+        }
         if (key.kind == Key::Kind::Printable || key.kind == Key::Kind::Enter || key.kind == Key::Kind::Tab) {
             const std::u32string old = composer_.shown();
             const char32_t c = key.kind == Key::Kind::Printable ? key.ch : 0;
@@ -174,7 +232,9 @@ bool Engine::handle(const Key& key) {
     }
 
     if (composer_.raw().empty() && !composer_.frozen() && has_surrounding_ && is_modifier_key(key.ch)) {
-        try_reattach();
+        if (const std::size_t right = try_reattach(key.ch); right > 0) {
+            return edit_mid_word(right, key.ch);
+        }
     }
     const std::u32string old = composer_.shown();
     const bool was_frozen = composer_.frozen();
@@ -201,27 +261,39 @@ bool Engine::handle(const Key& key) {
     return false;
 }
 
-void Engine::try_reattach() {
+std::size_t Engine::try_reattach(char32_t key) {
     // Nhặt lại từ ngay trước con trỏ (sau click, mũi tên, Space rồi Backspace…) để sửa dấu.
     const Surrounding s = host_.surrounding();
     const std::size_t cursor = std::min<std::size_t>(s.cursor, s.text.size());
     if (s.anchor != s.cursor) {
-        return;  // đang có vùng chọn
+        return 0;  // đang có vùng chọn
     }
+    // Con trỏ ở giữa từ: chỉ nhận phím dấu thanh (s f r x j z), vì dấu thanh đặt theo cả âm tiết
+    // (hoa|ng + f -> hoàng). Phím khác (chữ, mũ, móc) chèn giữa từ như bình thường.
+    std::size_t right = 0;
     if (cursor < s.text.size() && is_word_char(s.text[cursor])) {
-        return;  // con trỏ ở giữa từ: đặt dấu có thể sai, bỏ qua
+        const char32_t k = static_cast<char32_t>(std::tolower(static_cast<int>(key < 0x80 ? key : 0)));
+        if (k != U's' && k != U'f' && k != U'r' && k != U'x' && k != U'j' && k != U'z') {
+            return 0;
+        }
+        while (cursor + right < s.text.size() && is_word_char(s.text[cursor + right]) && right < 12) {
+            ++right;
+        }
+        if (cursor + right < s.text.size() && is_word_char(s.text[cursor + right])) {
+            return 0;  // từ quá dài
+        }
     }
     std::size_t b = cursor;
     while (b > 0 && is_word_char(s.text[b - 1]) && cursor - b < 12) {
         --b;
     }
     if (b == cursor || (b > 0 && is_word_char(s.text[b - 1]))) {
-        return;  // không có từ, hoặc từ quá dài (không phải tiếng Việt)
+        return 0;  // không có từ, hoặc từ quá dài (không phải tiếng Việt)
     }
     if (b > 0 && is_code_char(s.text[b - 1])) {
-        return;  // ngữ cảnh code (FR-013)
+        return 0;  // ngữ cảnh code (FR-013)
     }
-    const std::u32string word = s.text.substr(b, cursor - b);
+    const std::u32string word = s.text.substr(b, cursor - b + right);
     const bool ascii = std::all_of(word.begin(), word.end(), [](char32_t c) { return c < 0x80; });
     if (ascii && config_.telex.english != nullptr) {
         std::string lower = u32_to_utf8(word);
@@ -229,14 +301,33 @@ void Engine::try_reattach() {
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         }
         if (config_.telex.english->contains(lower)) {
-            return;  // từ tiếng Anh: không nhặt lại (test + s -> tests)
+            return 0;  // từ tiếng Anh: không nhặt lại (test + s -> tests)
         }
     }
     if (composer_.attach(word)) {
         recent_.clear();
         inflight_.reset();
-        log("reattach len=" + std::to_string(word.size()));
+        log("reattach len=" + std::to_string(word.size()) + " right=" + std::to_string(right));
+        return right;
     }
+    return 0;
+}
+
+bool Engine::edit_mid_word(std::size_t right_len, char32_t key) {
+    // Composer đang giữ cả từ (trái + phải con trỏ). Áp phím dấu thanh cho cả âm tiết, rồi
+    // thay nguyên từ: xóa phần trái và phải con trỏ, chèn từ mới (con trỏ về cuối từ).
+    const std::u32string old = composer_.shown();
+    const EditAction a = composer_.letter(static_cast<char>(key));
+    const std::u32string now = composer_.shown();
+    composer_.reset();
+    if (a.kind != EditAction::Kind::Replace || now == old) {
+        return false;  // phím không đổi gì: để ứng dụng chèn như bình thường
+    }
+    const std::size_t left_len = old.size() - right_len;
+    host_.delete_surrounding(-static_cast<int>(left_len), static_cast<unsigned>(left_len + right_len));
+    host_.commit(u32_to_utf8(now));
+    log("midword_edit left=" + std::to_string(left_len) + " right=" + std::to_string(right_len));
+    return true;
 }
 
 void Engine::note_shown(const std::u32string& old, const std::u32string& now) {
@@ -498,7 +589,14 @@ bool Engine::process_preedit(const Key& key) {
         }
         return true;
     }
-    commit_preedit(key.kind != Key::Kind::Escape);
+    if (key.kind == Key::Kind::Escape && !preedit_raw_.empty() && config_.escape_restores_raw) {
+        host_.hide_preedit();
+        host_.commit(preedit_raw_);  // Esc: giữ nguyên chuỗi phím gốc
+        preedit_raw_.clear();
+        preedit_shown_.clear();
+        return true;
+    }
+    commit_preedit(true);
     return false;
 }
 

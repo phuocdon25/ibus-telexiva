@@ -89,6 +89,15 @@ finalize	old	posts	posts	cases
 finalize	old	costs	costs	cases
 finalize	old	hosts	hosts	cases
 finalize	old	ass	as	cases
+finalize	old	AWS	AWS	cases
+finalize	old	OS	OS	cases
+finalize	old	REST	REST	cases
+finalize	old	CORS	CORS	cases
+finalize	old	UX	UX	cases
+finalize	old	API	API	cases
+finalize	old	JSON	JSON	cases
+finalize	old	os	ó	cases
+finalize	old	Os	Ó	cases
 finalize	old	lo	lo	cases
 finalize	old	Q	Q	cases
 finalize	old	localhost	localhost	cases

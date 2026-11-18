@@ -45,6 +45,8 @@ public:
     virtual double now_ms() = 0;
     // Chỉ ghi số liệu, không bao giờ ghi nội dung người dùng gõ (NFR-004).
     virtual void log(const std::string& line) = 0;
+    // Chế độ Việt/Anh vừa đổi (để cập nhật biểu tượng trên thanh trạng thái).
+    virtual void mode_changed(bool /*vietnamese*/) {}
 };
 
 enum class Strategy { Auto, Preedit /*S1*/, Surrounding /*S2*/, ForwardKeys /*S3*/ };
@@ -54,6 +56,9 @@ struct EngineConfig {
     Strategy strategy = Strategy::Auto;
     bool guard = true;
     double wait_ms = 100.0;  // trang web nặng có thể mất ~50 ms để xác nhận một lần sửa
+    bool toggle_ctrl_shift = true;     // nhấn rồi thả Ctrl+Shift để chuyển Việt/Anh (FR-004)
+    bool escape_restores_raw = true;   // Esc khi đang gõ: khôi phục chuỗi phím gốc
+    const MacroTable* macros = nullptr;  // gõ tắt (FR-012)
 };
 
 struct Key {
@@ -83,6 +88,9 @@ public:
     void on_surrounding_changed();
 
     [[nodiscard]] bool preedit_mode() const { return preedit_mode_; }
+    [[nodiscard]] bool vietnamese() const { return vietnamese_; }
+    void set_vietnamese(bool on);
+    void toggle_mode() { set_vietnamese(!vietnamese_); }
     [[nodiscard]] Strategy effective_strategy() const;
 
 private:
@@ -101,7 +109,9 @@ private:
     void wait_confirm();
     void check_pending_verify();
     void note_shown(const std::u32string& old, const std::u32string& now);
-    void try_reattach();
+    std::size_t try_reattach(char32_t key);   // trả về số ký tự sau con trỏ thuộc cùng từ (sửa giữa từ)
+    bool track_toggle_hotkey(const Key& key);
+    bool edit_mid_word(std::size_t right_len, char32_t key);
     void reset_word(const char* why);
 
     bool process_preedit(const Key& key);
@@ -127,6 +137,8 @@ private:
     bool waiting_ = false;
     std::deque<Key> queue_;
 
+    bool vietnamese_ = true;
+    bool toggle_armed_ = false;
     bool preedit_mode_ = false;  // ô này bỏ qua / làm sai lệnh xóa -> dùng nháp
     std::string preedit_raw_;
     std::u32string preedit_shown_;

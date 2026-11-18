@@ -1,0 +1,20 @@
+# Gõ tắt cho Telexiva. Chép file này thành ~/.config/telexiva/macros.txt rồi `ibus restart`.
+#
+# Mỗi dòng: khóa = nội dung. Khóa là chuỗi phím chữ cái (không dấu, không số).
+# Gõ khóa rồi Space / dấu câu / Enter thì được thay bằng nội dung.
+# Giữ kiểu chữ: ko -> không, Ko -> Không, KO -> KHÔNG.
+# Từ đứng sau _ . / @ … (code, URL, email) không bị thay.
+#
+# Lưu ý: chọn khóa không trùng từ bạn hay gõ thật (ví dụ đừng dùng "an", "co").
+
+ko = không
+kg = không
+dc = được
+vs = với
+ntn = như thế nào
+bn = bao nhiêu
+vn = Việt Nam
+hn = Hà Nội
+hcm = Hồ Chí Minh
+tks = cảm ơn
+

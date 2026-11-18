@@ -50,4 +50,7 @@ struct TelexOptions {
 // để "nhặt lại" từ đã gõ khi người dùng quay lại sửa. nullopt nếu chữ có ký tự lạ.
 [[nodiscard]] std::optional<std::string> keys_for(std::u32string_view word);
 
+// Viết hoa chữ tiếng Việt (ư -> Ư, ệ -> Ệ, đ -> Đ).
+[[nodiscard]] std::u32string to_upper(std::u32string_view s);
+
 }  // namespace telexiva

@@ -536,7 +536,7 @@ Applied apply_keys(std::string_view keys) {
     return r;
 }
 
-char32_t to_upper(char32_t c) {
+char32_t upper_char(char32_t c) {
     if (c < 0x80) {
         return static_cast<char32_t>(std::toupper(static_cast<int>(c)));
     }
@@ -555,7 +555,21 @@ std::string lower_ascii(std::string_view s) {
     return out;
 }
 
+// Từ viết tắt kỹ thuật hay gõ IN HOA mà quy tắc Telex sẽ biến đổi nhầm (AWS -> Ắ, OS -> Ó,
+// REST -> RÉT). Chỉ áp dụng khi gõ toàn chữ hoa; "os" viết thường vẫn là tiếng Việt.
+bool is_upper_acronym(std::string_view keys) {
+    static const std::unordered_set<std::string> acronyms = {"ajax", "asap", "asus", "aws", "coo", "cors", "ddd", "ddos", "dos", "ecs", "gif", "nas", "oop", "orm", "os", "paas", "pos", "pwa", "rar", "rest", "saas", "sos", "tar", "uri", "ux", "waf"};
+    if (keys.size() < 2 || !std::all_of(keys.begin(), keys.end(),
+                                        [](char c) { return std::isupper(static_cast<unsigned char>(c)) != 0; })) {
+        return false;
+    }
+    return acronyms.count(lower_ascii(keys)) != 0;
+}
+
 std::string render(std::string_view keys, bool strict, const TelexOptions& options) {
+    if (is_upper_acronym(keys)) {
+        return std::string(keys);
+    }
     const Tables& t = tables();
     Applied a = apply_keys(keys);
     auto& chars = a.chars;
@@ -583,7 +597,7 @@ std::string render(std::string_view keys, bool strict, const TelexOptions& optio
         u32 s;
         s.reserve(out.size());
         for (std::size_t i = 0; i < out.size(); ++i) {
-            s.push_back(chars[i].upper ? to_upper(out[i]) : out[i]);
+            s.push_back(chars[i].upper ? upper_char(out[i]) : out[i]);
         }
         return to_utf8(s);
     };
@@ -701,6 +715,14 @@ bool WordSet::contains(std::string_view word) const { return words_.count(std::s
 
 std::string transform(std::string_view keys, const TelexOptions& options) {
     return render(keys, /*strict=*/false, options);
+}
+
+std::u32string to_upper(std::u32string_view s) {
+    std::u32string out(s);
+    for (char32_t& c : out) {
+        c = upper_char(c);
+    }
+    return out;
 }
 
 std::optional<std::string> keys_for(std::u32string_view word) {

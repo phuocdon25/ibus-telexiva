@@ -13,6 +13,8 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #include "telexiva/telex.hpp"
@@ -46,6 +48,19 @@ struct WordEndResult {
     EditAction fix;  // PassThrough nếu không cần sửa
 };
 
+// Gõ tắt (FR-012): "ko" + Space -> "không". Khóa là chuỗi phím (chữ thường ASCII).
+class MacroTable {
+public:
+    // File mỗi dòng "khóa = nội dung" (UTF-8); dòng bắt đầu bằng # là chú thích.
+    static MacroTable load(const std::string& path);
+    void add(std::string key, std::u32string expansion);
+    [[nodiscard]] const std::u32string* find(std::string_view key_lower) const;
+    [[nodiscard]] std::size_t size() const { return table_.size(); }
+
+private:
+    std::unordered_map<std::string, std::u32string> table_;
+};
+
 class Composer {
 public:
     Composer() = default;
@@ -72,6 +87,13 @@ public:
     // dùng cho ngữ cảnh code (FR-013).
     void set_prev_char(char32_t c) { prev_char_ = c; }
 
+    // Bảng gõ tắt (có thể nullptr). Áp dụng khi kết thúc từ bằng Space/dấu câu/Enter.
+    void set_macros(const MacroTable* macros) { macros_ = macros; }
+
+    // Khôi phục chuỗi phím gốc của từ đang gõ (Esc khi engine đoán sai: tét -> test).
+    // Sau đó phần còn lại của từ đi thẳng.
+    EditAction restore_raw();
+
     [[nodiscard]] const std::string& raw() const { return raw_; }
     [[nodiscard]] const std::u32string& shown() const { return shown_; }
     [[nodiscard]] bool frozen() const { return frozen_; }
@@ -79,8 +101,11 @@ public:
 
 private:
     EditAction diff_to(const std::u32string& next);
+    const std::u32string* macro_for_raw();
 
     TelexOptions options_;
+    const MacroTable* macros_ = nullptr;
+    std::u32string macro_cased_;
     std::string raw_;          // các phím của từ hiện tại
     std::u32string shown_;     // chữ Composer tin là đang nằm trong ứng dụng cho từ này
     bool frozen_ = false;      // ngữ cảnh code hoặc guard: phần còn lại của từ đi thẳng
