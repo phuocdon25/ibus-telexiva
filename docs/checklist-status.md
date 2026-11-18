@@ -1,6 +1,6 @@
 # Đối chiếu: Typing Engine Improvement Checklist
 
-Đối chiếu với `Telexiva_Typing_Engine_Improvement_Checklist.md` (2026-11-18). ✅ đã có · 🟡 một phần · ❌ chưa · ➖ không áp dụng.
+Đối chiếu với [Telexiva_Typing_Engine_Improvement_Checklist.md](Telexiva_Typing_Engine_Improvement_Checklist.md) (2026-11-18). ✅ đã có · 🟡 một phần · ❌ chưa · ➖ không áp dụng.
 
 ## Điều chỉnh so với checklist
 
