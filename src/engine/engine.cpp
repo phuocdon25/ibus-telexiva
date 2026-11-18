@@ -63,6 +63,25 @@ Engine::Engine(Host& host, EngineConfig config)
     composer_.set_macros(config.macros);
 }
 
+void Engine::log(const std::string& line) { host_.log("[" + client_ + "] " + line); }
+
+Strategy Engine::effective_strategy() const {
+    if (config_.strategy != Strategy::Auto) {
+        return config_.strategy;
+    }
+    if (preedit_mode_) {
+        return Strategy::Preedit;
+    }
+    if (purpose_ == Purpose::Terminal) {
+        return Strategy::ForwardKeys;
+    }
+    return has_surrounding_ ? Strategy::Surrounding : Strategy::ForwardKeys;
+}
+
+// ---------------------------------------------------------------------------
+// Phím
+// ---------------------------------------------------------------------------
+
 bool Engine::process_key(const Key& key) {
     if (waiting_) {
         // Phím đến trong lúc đang đợi xác nhận: giữ lại, xử lý sau đúng thứ tự.
