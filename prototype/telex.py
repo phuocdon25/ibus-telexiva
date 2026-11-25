@@ -12,6 +12,7 @@ Không nhằm đầy đủ như FR-001; chỉ đủ để kiểm chứng commit 
 
 from __future__ import annotations
 
+import bisect
 import os
 
 TONE_KEYS = {"s": 1, "f": 2, "r": 3, "x": 4, "j": 5}
@@ -73,6 +74,18 @@ def _english() -> set[str]:
                     _ENGLISH = {w.strip().lower() for w in f if w.strip().isascii()}
                 break
     return _ENGLISH
+
+
+_ENGLISH_SORTED: list[str] | None = None
+
+
+def _english_has_prefix(prefix: str) -> bool:
+    """Có từ tiếng Anh nào bắt đầu bằng prefix không (text, good, master…)."""
+    global _ENGLISH_SORTED
+    if _ENGLISH_SORTED is None:
+        _ENGLISH_SORTED = sorted(_english())
+    i = bisect.bisect_left(_ENGLISH_SORTED, prefix)
+    return i < len(_ENGLISH_SORTED) and _ENGLISH_SORTED[i].startswith(prefix)
 
 
 def _strip(s: str) -> str:
@@ -415,9 +428,25 @@ def _render(keys: str, strict: bool, new_style: bool) -> str:
     return cased(out)
 
 
+def _render_keeping_vietnamese(keys: str, strict: bool, new_style: bool) -> str:
+    """Như _render, nhưng khi một phím thừa làm từ tiếng Việt đã đúng thành sai
+    (động + e), giữ phần tiếng Việt và chỉ thêm phím thừa (độnge) thay vì trả về
+    nguyên chuỗi phím (ddoongje). Từ tiếng Anh (text, good, master) vẫn khôi phục."""
+    out = _render(keys, strict, new_style)
+    if out != keys or len(keys) < 2 or not _english():
+        return out
+    if _english_has_prefix(keys.lower()):
+        return out  # đang gõ một từ tiếng Anh: khôi phục chuỗi phím như cũ
+    for i in range(len(keys) - 1, 0, -1):
+        pre = _render(keys[:i], strict, new_style)
+        if pre != keys[:i] and not pre.isascii():
+            return pre + keys[i:]
+    return out
+
+
 def transform(keys: str, new_style: bool = False) -> str:
-    return _render(keys, strict=False, new_style=new_style)
+    return _render_keeping_vietnamese(keys, strict=False, new_style=new_style)
 
 
 def finalize(keys: str, new_style: bool = False) -> str:
-    return _render(keys, strict=True, new_style=new_style)
+    return _render_keeping_vietnamese(keys, strict=True, new_style=new_style)

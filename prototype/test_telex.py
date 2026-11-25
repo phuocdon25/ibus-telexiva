@@ -44,6 +44,9 @@ class TelexFinal(unittest.TestCase):
         # từ viết tắt IN HOA
         ("AWS", "AWS"), ("OS", "OS"), ("REST", "REST"), ("CORS", "CORS"), ("UX", "UX"),
         ("API", "API"), ("JSON", "JSON"), ("os", "ó"), ("Os", "Ó"),
+        # gõ thừa một phím sau từ tiếng Việt đã đúng: giữ phần tiếng Việt
+        ("ddoongje", "độnge"), ("hocje", "họce"), ("vieejtt", "việtt"),
+        ("text", "text"), ("good", "good"), ("master", "master"),
         # không biến đổi
         ("lo", "lo"), ("Q", "Q"), ("localhost", "localhost"),
     ]

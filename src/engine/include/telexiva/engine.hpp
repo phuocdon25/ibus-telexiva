@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,9 @@ struct EngineConfig {
     double wait_ms = 100.0;  // trang web nặng có thể mất ~50 ms để xác nhận một lần sửa
     bool escape_restores_raw = true;   // Esc khi đang gõ: khôi phục chuỗi phím gốc
     const MacroTable* macros = nullptr;  // gõ tắt (FR-012)
+    // Ghi nhớ "dấu vân tay" (purpose, hints) của ô đã làm hỏng lệnh sửa; lần sau vào ô có
+    // cùng dấu vân tay thì dùng nháp ngay từ đầu (ChatGPT/Gemini không sai từ đầu tiên).
+    bool learn_unreliable_fields = true;
 };
 
 struct Key {
@@ -100,12 +104,14 @@ private:
     bool guard_ok(const std::u32string& old);
     unsigned mutter_safe_delete_count(const std::u32string& to_delete);
     bool selection_after_cursor();
-    void wait_confirm();
+    bool wait_confirm();  // true nếu ô nhập đã xác nhận (surrounding text mới)
     void check_pending_verify();
     void note_shown(const std::u32string& old, const std::u32string& now);
     std::size_t try_reattach(char32_t key);   // trả về số ký tự sau con trỏ thuộc cùng từ (sửa giữa từ)
     bool edit_mid_word(std::size_t right_len, char32_t key);
     void reset_word(const char* why);
+    void apply_learned_field();
+    bool is_english_word(const std::u32string& word) const;
 
     bool process_preedit(const Key& key);
     void show_preedit();
@@ -131,6 +137,9 @@ private:
     std::deque<Key> queue_;
 
     bool preedit_mode_ = false;  // ô này bỏ qua / làm sai lệnh xóa -> dùng nháp
+    std::set<std::pair<int, std::uint32_t>> unreliable_fields_;  // dấu vân tay đã học
+    std::u32string last_word_;     // từ vừa gõ xong (để Backspace xóa dấu cách là sửa tiếp được)
+    bool last_word_fresh_ = false;
     std::string preedit_raw_;
     std::u32string preedit_shown_;
 };

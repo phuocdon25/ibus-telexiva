@@ -118,6 +118,9 @@ bool Engine::handle(const Key& key) {
     if (key.release || key.kind == Key::Kind::Modifier) {
         return false;
     }
+    // "Từ vừa gõ xong" chỉ còn hiệu lực cho đúng phím kế tiếp (Backspace xóa dấu cách).
+    const bool last_word_usable = last_word_fresh_;
+    last_word_fresh_ = false;
     if (purpose_ == Purpose::Password || purpose_ == Purpose::Pin) {
         return false;  // FR-011
     }
@@ -161,11 +164,30 @@ bool Engine::handle(const Key& key) {
         if (key.kind == Key::Kind::Printable || key.kind == Key::Kind::Enter || key.kind == Key::Kind::Tab) {
             const std::u32string old = composer_.shown();
             const char32_t c = key.kind == Key::Kind::Printable ? key.ch : 0;
+            const bool had_word = !composer_.raw().empty() && !composer_.frozen();
             const WordEndResult r = composer_.word_end(c);
+            std::u32string finished = old;
             if (r.fix.kind == EditAction::Kind::Replace) {
                 log(c == U'@' ? "email_local_part -> restore raw" : "finalize restore");
-                apply_edit(old, r.fix);
+                if (apply_edit(old, r.fix)) {
+                    finished = old.substr(0, old.size() - std::min(r.fix.delete_count, old.size())) +
+                               utf8_to_u32(r.fix.insert);
+                }
             }
+            // Nhớ từ vừa xong nếu kết thúc bằng một ký tự in được (dấu cách, dấu câu).
+            last_word_ = finished;
+            last_word_fresh_ = had_word && c != 0 && c != U'@' && !finished.empty();
+        } else if (key.kind == Key::Kind::Backspace && composer_.raw().empty() && last_word_usable) {
+            // Backspace ngay sau khi gõ xong một từ (xóa dấu cách): nhặt lại từ đó từ bộ nhớ,
+            // không cần đọc ô nhập (ô có thể chưa kịp cập nhật khi gõ nhanh). học␣ ⌫ s -> hóc.
+            if (!is_english_word(last_word_) && composer_.attach(last_word_)) {
+                log("backspace -> reattach last word len=" + std::to_string(last_word_.size()));
+            }
+            recent_.clear();
+            inflight_.reset();
+            pending_.reset();
+            awaiting_confirm_ = host_.now_ms();  // ô nhập sẽ gửi nội dung mới sau khi xóa
+            return false;
         } else if (key.kind == Key::Kind::Backspace && !composer_.raw().empty() && !composer_.frozen()) {
             // Backspace trong lúc gõ: ứng dụng xóa ký tự cuối; Composer nhớ phần còn lại để
             // vẫn sửa dấu được (việt -> Backspace -> việ -> s -> viế).
@@ -177,6 +199,7 @@ bool Engine::handle(const Key& key) {
             recent_.clear();
             inflight_.reset();
             pending_.reset();
+            awaiting_confirm_ = host_.now_ms();
             return false;
         } else {
             composer_.reset();
@@ -249,15 +272,8 @@ std::size_t Engine::try_reattach(char32_t key) {
         return 0;  // ngữ cảnh code (FR-013)
     }
     const std::u32string word = s.text.substr(b, cursor - b + right);
-    const bool ascii = std::all_of(word.begin(), word.end(), [](char32_t c) { return c < 0x80; });
-    if (ascii && config_.telex.english != nullptr) {
-        std::string lower = u32_to_utf8(word);
-        for (char& c : lower) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        }
-        if (config_.telex.english->contains(lower)) {
-            return 0;  // từ tiếng Anh: không nhặt lại (test + s -> tests)
-        }
+    if (is_english_word(word)) {
+        return 0;  // từ tiếng Anh: không nhặt lại (test + s -> tests)
     }
     if (composer_.attach(word)) {
         recent_.clear();
@@ -315,7 +331,16 @@ bool Engine::apply_edit(const std::u32string& old, const EditAction& action) {
     const Strategy strategy = effective_strategy();
 
     if (n_del && strategy == Strategy::Surrounding) {
-        wait_confirm();
+        const bool confirmed = wait_confirm();
+        // Kiểm tra lần sửa trước ngay bây giờ (không đợi phím sau): nếu ô làm hỏng nó thì
+        // chuyển sang nháp trước khi làm hỏng thêm (ChatGPT khi gõ nhanh). Chỉ khi ô nhập đã
+        // xác nhận: nếu chưa, bản sao chữ có thể còn cũ và kết luận sẽ sai.
+        if (pending_ && confirmed) {
+            check_pending_verify();
+            if (preedit_mode_) {
+                return false;
+            }
+        }
     }
     if (n_del && !guard_ok(old)) {
         return false;
@@ -449,23 +474,25 @@ bool Engine::selection_after_cursor() {
     return s.anchor > s.cursor;
 }
 
-void Engine::wait_confirm() {
+bool Engine::wait_confirm() {
     if (!awaiting_confirm_) {
-        return;
+        return true;
     }
     const double start = host_.now_ms();
     if (start - *awaiting_confirm_ > 300) {
         awaiting_confirm_.reset();  // quá cũ: ô nhập không gửi xác nhận
-        return;
+        return false;
     }
     waiting_ = true;
     while (awaiting_confirm_ && host_.now_ms() - start < config_.wait_ms) {
         host_.iterate_main_loop();
     }
     waiting_ = false;
+    const bool confirmed = !awaiting_confirm_;
     log(fmt("wait_confirm waited_ms=%.1f confirmed=%.0f queued=%.0f", host_.now_ms() - start,
-            awaiting_confirm_ ? 0.0 : 1.0, static_cast<double>(queue_.size())));
+            confirmed ? 1.0 : 0.0, static_cast<double>(queue_.size())));
     awaiting_confirm_.reset();
+    return confirmed;
 }
 
 void Engine::on_surrounding_changed() {
@@ -506,6 +533,13 @@ void Engine::check_pending_verify() {
     }
     // Chữ engine chèn vẫn ở đó nhưng phần trước sai (taoạo, gống…): ô không đáng tin với S2.
     preedit_mode_ = true;
+    // Học dấu vân tay, trừ thanh địa chỉ (đã có cách sửa hai bước) và dấu vân tay phổ biến
+    // (purpose=0, hints=0) để không kéo mọi ô sang nháp.
+    if (config_.learn_unreliable_fields && purpose_ != Purpose::Url && hints_ != 0) {
+        unreliable_fields_.insert({static_cast<int>(purpose_), hints_});
+        log("learned unreliable field purpose=" + std::to_string(static_cast<int>(purpose_)) +
+            " hints=" + std::to_string(hints_));
+    }
     log(std::string("s2_unreliable kind=") + (either(pv.broken) ? "ignored" : "mismatch") +
         " -> preedit purpose=" + std::to_string(static_cast<int>(purpose_)) + " hints=" + std::to_string(hints_));
     reset_word("s2_unreliable");
@@ -586,6 +620,8 @@ void Engine::focus_in(const std::string& client) {
     preedit_raw_.clear();
     preedit_shown_.clear();
     pending_.reset();
+    last_word_fresh_ = false;
+    apply_learned_field();
     log(fmt("focus_in surrounding=%.0f purpose=%.0f hints=%.0f", has_surrounding_ ? 1 : 0,
             static_cast<double>(purpose_), static_cast<double>(hints_)));
 }
@@ -607,6 +643,27 @@ void Engine::set_capabilities(bool surrounding_text) { has_surrounding_ = surrou
 void Engine::set_content_type(Purpose purpose, std::uint32_t hints) {
     purpose_ = purpose;
     hints_ = hints;
+    apply_learned_field();
+}
+
+bool Engine::is_english_word(const std::u32string& word) const {
+    const bool ascii = std::all_of(word.begin(), word.end(), [](char32_t c) { return c < 0x80; });
+    if (!ascii || config_.telex.english == nullptr) {
+        return false;
+    }
+    std::string lower = u32_to_utf8(word);
+    for (char& c : lower) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return config_.telex.english->contains(lower);
+}
+
+void Engine::apply_learned_field() {
+    if (!preedit_mode_ && unreliable_fields_.count({static_cast<int>(purpose_), hints_}) != 0) {
+        preedit_mode_ = true;  // ô này từng làm hỏng lệnh sửa: dùng nháp ngay từ đầu
+        log("learned field -> preedit purpose=" + std::to_string(static_cast<int>(purpose_)) +
+            " hints=" + std::to_string(hints_));
+    }
 }
 
 }  // namespace telexiva

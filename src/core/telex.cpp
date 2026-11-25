@@ -709,12 +709,52 @@ WordSet WordSet::load_default() {
     return {};
 }
 
-void WordSet::insert(std::string word) { words_.insert(std::move(word)); }
+void WordSet::insert(std::string word) {
+    words_.insert(std::move(word));
+    sorted_dirty_ = true;
+}
+
+bool WordSet::has_prefix(std::string_view prefix) const {
+    if (sorted_dirty_) {
+        sorted_.assign(words_.begin(), words_.end());
+        std::sort(sorted_.begin(), sorted_.end());
+        sorted_dirty_ = false;
+    }
+    const auto it = std::lower_bound(sorted_.begin(), sorted_.end(), prefix,
+                                     [](const std::string& a, std::string_view b) { return a < b; });
+    return it != sorted_.end() && std::string_view(*it).substr(0, prefix.size()) == prefix;
+}
 
 bool WordSet::contains(std::string_view word) const { return words_.count(std::string(word)) != 0; }
 
+namespace {
+
+// Như render, nhưng khi một phím thừa làm từ tiếng Việt đã đúng thành sai (động + e),
+// giữ phần tiếng Việt và chỉ thêm phím thừa (độnge) thay vì trả về nguyên chuỗi phím
+// (ddoongje). Từ tiếng Anh (text, good, master) vẫn khôi phục.
+std::string render_keeping_vietnamese(std::string_view keys, bool strict, const TelexOptions& options) {
+    std::string out = render(keys, strict, options);
+    if (out != keys || keys.size() < 2 || options.english == nullptr || options.english->size() == 0) {
+        return out;
+    }
+    if (options.english->has_prefix(lower_ascii(keys))) {
+        return out;  // đang gõ một từ tiếng Anh: khôi phục chuỗi phím như cũ
+    }
+    for (std::size_t i = keys.size() - 1; i > 0; --i) {
+        const std::string pre = render(keys.substr(0, i), strict, options);
+        const bool ascii = std::all_of(pre.begin(), pre.end(),
+                                       [](char c) { return static_cast<unsigned char>(c) < 0x80; });
+        if (pre != keys.substr(0, i) && !ascii) {
+            return pre + std::string(keys.substr(i));
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
 std::string transform(std::string_view keys, const TelexOptions& options) {
-    return render(keys, /*strict=*/false, options);
+    return render_keeping_vietnamese(keys, /*strict=*/false, options);
 }
 
 std::u32string to_upper(std::u32string_view s) {
@@ -781,7 +821,7 @@ std::optional<std::string> keys_for(std::u32string_view word) {
 }
 
 std::string finalize(std::string_view keys, const TelexOptions& options) {
-    return render(keys, /*strict=*/true, options);
+    return render_keeping_vietnamese(keys, /*strict=*/true, options);
 }
 
 }  // namespace telexiva

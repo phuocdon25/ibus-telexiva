@@ -68,8 +68,16 @@ struct FakeHost : Host {
     void forward_key(std::uint32_t, std::uint32_t, std::uint32_t) override {}  // Wayland: không tới app
     void update_preedit(const std::string& utf8) override { preedit = utf8; }
     void hide_preedit() override { preedit.clear(); }
+    Engine* engine = nullptr;     // để giả lập ô nhập gửi xác nhận trong lúc engine đợi
+    bool deliver_on_wait = false; // lần đợi kế tiếp: Mutter cập nhật bản sao + gửi xác nhận
     bool iterate_main_loop() override {
         t += 1;
+        if (deliver_on_wait && engine != nullptr) {
+            deliver_on_wait = false;
+            view = buf;
+            engine->on_surrounding_changed();
+            return true;
+        }
         return false;
     }
     double now_ms() override { return t; }
@@ -86,6 +94,7 @@ struct Session {
     bool stale_next = false;
 
     explicit Session(EngineConfig cfg = {}) : engine(host, cfg) {
+        host.engine = &engine;
         engine.set_capabilities(true);
         engine.focus_in("test");
     }
@@ -311,4 +320,65 @@ TEST_CASE("Engine: gõ tắt (FR-012)", "[engine][macro]") {
 
 TEST_CASE("Engine: từ viết tắt IN HOA giữ nguyên", "[engine]") {
     CHECK(Session{}.type("AWS OS REST CORS UX API os ").text() == "AWS OS REST CORS UX API ó ");
+}
+
+namespace {
+const WordSet& small_dict() {
+    static WordSet words = [] {
+        WordSet w;
+        for (const char* x : {"text", "good", "master"}) {
+            w.insert(x);
+        }
+        return w;
+    }();
+    return words;
+}
+EngineConfig with_dict() {
+    EngineConfig cfg;
+    cfg.telex.english = &small_dict();
+    return cfg;
+}
+}  // namespace
+
+TEST_CASE("Engine: gõ thừa một phím sau từ đã đúng không làm hỏng cả từ", "[engine][typo]") {
+    CHECK(Session{with_dict()}.type("ddoongje ").text() == "độnge ");  // trước đây: ddoongje
+    CHECK(Session{with_dict()}.type("text good ").text() == "text good ");
+}
+
+TEST_CASE("Engine: Space rồi Backspace rồi phím dấu, khi ô nhập chưa kịp cập nhật", "[engine][edit]") {
+    Session s;
+    s.host.stale_mode = true;
+    s.type("hocj ");
+    // Backspace: ứng dụng xóa dấu cách, nhưng bản sao của Mutter vẫn còn "học ".
+    s.stale_next = true;
+    s.type("\b");
+    s.stale_next = true;
+    s.host.deliver_on_wait = true;  // xác nhận đến trong lúc engine đợi
+    s.type("s ");
+    CHECK(s.text() == "hóc ");
+}
+
+TEST_CASE("Engine: học dấu vân tay ô không đáng tin (ChatGPT) -> lần sau dùng nháp ngay", "[engine][learn]") {
+    Session s;
+    s.host.ignore_delete = true;
+    s.engine.set_content_type(Purpose::FreeForm, 65);
+    s.type("taoj vaanx ");
+    CHECK(s.engine.preedit_mode());
+    // Mở lại ô có cùng dấu vân tay: không còn sai từ đầu tiên.
+    s.host.buf.clear();
+    s.engine.focus_in("test");
+    s.engine.set_content_type(Purpose::FreeForm, 65);
+    CHECK(s.engine.preedit_mode());
+    s.type("taoj ");
+    CHECK(s.text() == "tạo ");
+}
+
+TEST_CASE("Engine: không học dấu vân tay phổ biến (0/0) và thanh địa chỉ", "[engine][learn]") {
+    Session s;
+    s.host.ignore_delete = true;
+    s.engine.set_content_type(Purpose::FreeForm, 0);
+    s.type("taoj vaanx ");
+    s.engine.focus_in("test");
+    s.engine.set_content_type(Purpose::FreeForm, 0);
+    CHECK_FALSE(s.engine.preedit_mode());
 }

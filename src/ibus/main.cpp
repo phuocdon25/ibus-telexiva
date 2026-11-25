@@ -94,6 +94,7 @@ const telexiva::MacroTable& macros() {
 //   guard = on | off
 //   escape = restore | off       (Esc khi đang gõ: khôi phục chuỗi phím gốc)
 //   macros = on | off            (gõ tắt từ ~/.config/telexiva/macros.txt)
+//   learn = on | off             (nhớ ô từng làm hỏng lệnh sửa để dùng nháp ngay lần sau)
 telexiva::EngineConfig load_config() {
     telexiva::EngineConfig cfg;
     cfg.telex.english = &english();
@@ -123,6 +124,8 @@ telexiva::EngineConfig load_config() {
             cfg.guard = value != "off";
         } else if (key == "escape") {
             cfg.escape_restores_raw = value != "off";
+        } else if (key == "learn") {
+            cfg.learn_unreliable_fields = value != "off";
         } else if (key == "macros") {
             cfg.macros = value == "off" ? nullptr : &macros();
         }

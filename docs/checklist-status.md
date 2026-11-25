@@ -26,6 +26,8 @@ Nhiều thứ tự gõ (`dudocwj`, `tiengse`, `chuaw`…), 38.264 chuỗi từ V
 - ✅ Backspace khi đang gõ vẫn sửa được dấu (`việt` → ⌫ → `việ` → `s` → `viế`).
 - ✅ Quay lại từ đã gõ (Space+⌫, click, mũi tên) rồi gõ phím dấu.
 - ✅ **Mới:** sửa dấu thanh khi con trỏ ở **giữa từ** (`hoa|ng` + `f` → `hoàng`).
+- ✅ **Mới (2026-11-25):** gõ thừa một phím sau từ đã đúng không làm hỏng cả từ (`động` + `e` → `độnge`, trước đây `ddoongje`). Từ tiếng Anh (`text`, `good`, `master`) vẫn khôi phục nhờ tra tiền tố trong từ điển.
+- ✅ **Mới (2026-11-25):** Space rồi Backspace rồi phím dấu: engine nhớ từ vừa gõ xong nên sửa được cả khi gõ nhanh (ô nhập chưa kịp cập nhật).
 - ✅ Ctrl+Backspace, Delete, Ctrl+Z: engine bỏ từ đang nhớ, không sửa gì (an toàn).
 - ❌ Sửa mũ/móc giữa từ (chỉ dấu thanh).
 
@@ -42,6 +44,9 @@ Nhiều thứ tự gõ (`dudocwj`, `tiengse`, `chuaw`…), 38.264 chuỗi từ V
 Context độc lập; không commit trùng (guard + kiểm tra sau khi sửa); Enter/Tab/Esc/mũi tên/phím tắt/focus; ô tự đổi nội dung (`content_changed`); ô không hỗ trợ đầy đủ → tự chuyển nháp.
 
 ## 7. Tương thích — 🟡
+
+**Mới (2026-11-25), ChatGPT/Gemini:** kiểm tra lần sửa trước ngay trước lần sửa sau (khi ô đã xác nhận) để chuyển sang nháp sớm hơn; ghi nhớ "dấu vân tay" (purpose, hints) của ô đã làm hỏng lệnh sửa (trừ thanh địa chỉ và 0/0) → lần sau vào lại dùng nháp ngay, không sai từ đầu tiên. Tắt bằng `learn = off`.
+
 
 ✅ input/textarea/contenteditable, controlled input, ô tiền tệ, omnibox, VS Code, GTK. ❌ Terminal (ngoài phạm vi theo quyết định của người dùng), Qt/Firefox chưa thử. Regression BUG-001/002/003 có test.
 

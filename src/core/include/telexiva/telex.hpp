@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 namespace telexiva {
 
@@ -27,10 +28,14 @@ public:
 
     void insert(std::string word);
     [[nodiscard]] bool contains(std::string_view word) const;
+    // Có từ nào bắt đầu bằng prefix không (đang gõ dở một từ tiếng Anh).
+    [[nodiscard]] bool has_prefix(std::string_view prefix) const;
     [[nodiscard]] std::size_t size() const { return words_.size(); }
 
 private:
     std::unordered_set<std::string> words_;
+    mutable std::vector<std::string> sorted_;  // sắp xếp lười để tra tiền tố
+    mutable bool sorted_dirty_ = true;
 };
 
 struct TelexOptions {
